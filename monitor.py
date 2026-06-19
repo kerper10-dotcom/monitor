@@ -646,19 +646,21 @@ def run():
         # ------------------------------------------------------------------
         # Provjera spremljenih oglasa (price tracking)
         # ------------------------------------------------------------------
-        # We still run this to keep the DB up to date and detect sold/removed,
-        # but we do NOT send Telegram notifications for price changes or sold ads anymore.
         saved_messages, _ = check_saved_ads(page)
         if saved_messages:
-            print(f"\n[S] Promjene na spremljenim oglasima (samo log, bez obavijesti): {len(saved_messages)}")
+            print(f"\n[S] Promjene na spremljenim oglasima: {len(saved_messages)}")
+            telegram_body += "\n<b>━━━ SPREMLJENI OGLASI ━━━</b>\n"
+            for msg in saved_messages:
+                telegram_body += msg + "\n\n"
+                print(f"  [!] {msg.split(chr(10))[0]}")
 
         browser.close()
 
     export_saved_ads_to_json()
 
-    # Salji Telegram SAMO za nove oglase (ne šaljemo "scan complete" ili price changes)
+    # Salji Telegram samo kad ima stvarnih događaja (novi oglasi ili promjene cijena / prodano)
     if not first_run and telegram_configured():
-        if total_new > 0:
+        if total_new > 0 or saved_messages:
             header = (
                 f"🆕 <b>NJUSKALO - NOVI OGLASI</b>\n"
                 f"📅 {time.strftime('%d.%m.%Y. %H:%M')}\n"
