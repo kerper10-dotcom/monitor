@@ -646,45 +646,25 @@ def run():
         # ------------------------------------------------------------------
         # Provjera spremljenih oglasa (price tracking)
         # ------------------------------------------------------------------
-        saved_messages, captcha_skipped = check_saved_ads(page)
-        if captcha_skipped:
-            telegram_body += (
-                f"\n⚠️ <i>CAPTCHA: {captcha_skipped} spremljenih oglasa nije provjereno.</i>\n"
-            )
+        # We still run this to keep the DB up to date and detect sold/removed,
+        # but we do NOT send Telegram notifications for price changes or sold ads anymore.
+        saved_messages, _ = check_saved_ads(page)
         if saved_messages:
-            print(f"\n[S] Promjene na spremljenim oglasima: {len(saved_messages)}")
-            telegram_body += "\n<b>━━━ SPREMLJENI OGLASI ━━━</b>\n"
-            for msg in saved_messages:
-                telegram_body += msg + "\n\n"
-                print(f"  [!] {msg.split(chr(10))[0]}")
+            print(f"\n[S] Promjene na spremljenim oglasima (samo log, bez obavijesti): {len(saved_messages)}")
 
         browser.close()
 
     export_saved_ads_to_json()
 
-    # Build status footer - always included so we know the bot ran
-    stats = get_db_stats()
-    now_str = time.strftime('%d.%m.%Y. %H:%M')
-    status = (
-        f"\n━━━━━━━━━━━━━━━━━━━━\n"
-        f"✅ <b>Scan završen</b>\n"
-        f"🕒 {now_str}\n"
-        f"🆕 Novi oglasi: {total_new}\n"
-        f"💰 Promjene cijena: {len(saved_messages)}\n"
-        f"📦 Ukupno u bazi: {stats['total']}"
-    )
-    if captcha_skipped:
-        status += f"\n⚠️ CAPTCHA preskočio {captcha_skipped} spremljenih oglasa"
-    telegram_body += status
-
-    # Salji Telegram - send every run so we know the bot is still alive
+    # Salji Telegram SAMO za nove oglase (ne šaljemo "scan complete" ili price changes)
     if not first_run and telegram_configured():
-        header = (
-            f"📊 <b>NJUSKALO - SCAN REPORT</b>\n"
-            f"📅 {now_str}\n"
-            f"━━━━━━━━━━━━━━━━━━━━"
-        )
-        send_telegram(header + telegram_body)
+        if total_new > 0:
+            header = (
+                f"🆕 <b>NJUSKALO - NOVI OGLASI</b>\n"
+                f"📅 {time.strftime('%d.%m.%Y. %H:%M')}\n"
+                f"━━━━━━━━━━━━━━━━━━━━"
+            )
+            send_telegram(header + telegram_body)
     elif first_run and total_new > 0:
         print(f"\n[i] Inicijalno spremljeno {total_new} oglasa u bazu (bez obavijesti)")
 
