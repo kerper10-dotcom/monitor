@@ -254,6 +254,35 @@ def export_saved_ads_to_json():
         json.dump(ads, f, ensure_ascii=False, indent=2)
 
 
+def _is_sold_or_removed(page_title: str, body_snippet: str) -> bool:
+    """Prodani oglas na Njuskalu cesto i dalje prikazuje cijenu — ne oslanjaj se samo na nju."""
+    title_l = (page_title or "").lower()
+    body_l = (body_snippet or "").lower()
+
+    if "(prodaja)" in title_l or "(prodano)" in title_l:
+        return True
+
+    sold_phrases = (
+        "ovaj oglas je prodan",
+        "oglas je prodan",
+        "prodaja završena",
+        "prodaja zavrsena",
+        "oglas istekao",
+        "oglas je istekao",
+        "oglas je neaktivan",
+        "neaktivan oglas",
+        "nije dostupan",
+        "nije pronađen",
+        "nije pronaden",
+        "ne postoji",
+        "uklonjen",
+        "nema više na raspolaganju",
+        "nema vise na raspolaganju",
+        "pronjuškaj slične oglase",
+    )
+    return any(p in body_l for p in sold_phrases)
+
+
 def check_saved_ads(page) -> tuple[list[str], int]:
     """Provjerava cijene spremljenih oglasa. Vraca (poruke, broj preskocenih CAPTCHA)."""
     conn = sqlite3.connect(DB_FILE)
@@ -296,6 +325,19 @@ def check_saved_ads(page) -> tuple[list[str], int]:
             conn.commit()
             conn.close()
             messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or current_url}\n🔗 {url}")
+            continue
+
+        try:
+            body_snippet = page.locator("body").inner_text()[:4000].lower()
+        except Exception:
+            body_snippet = ""
+
+        if _is_sold_or_removed(page_title, body_snippet):
+            conn = sqlite3.connect(DB_FILE)
+            conn.execute("DELETE FROM saved_ads WHERE id = ?", (ad_id,))
+            conn.commit()
+            conn.close()
+            messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
             continue
 
         # Dohvati trenutnu cijenu (robustnije - DOM + fallback na sadržaj i JSON)
@@ -601,7 +643,6 @@ def run():
 
     total_new = 0
     telegram_body = ""
-    captcha_skipped = 0
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
