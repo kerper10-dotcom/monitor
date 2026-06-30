@@ -257,30 +257,15 @@ def export_saved_ads_to_json():
 def _is_sold_or_removed(page_title: str, body_snippet: str) -> bool:
     """Prodani oglas na Njuskalu cesto i dalje prikazuje cijenu — ne oslanjaj se samo na nju."""
     title_l = (page_title or "").lower()
-    body_l = (body_snippet or "").lower()
+    # Samo vrh stranice: footer/nav sadrzi fraze poput "pronjuškaj slične oglase" na SVIM oglasima
+    body_top = (body_snippet or "")[:1200].lower()
 
+    # Njuskalo u naslov dodaje (prodaja) samo kad je stvarno prodano
     if "(prodaja)" in title_l or "(prodano)" in title_l:
         return True
 
-    sold_phrases = (
-        "ovaj oglas je prodan",
-        "oglas je prodan",
-        "prodaja završena",
-        "prodaja zavrsena",
-        "oglas istekao",
-        "oglas je istekao",
-        "oglas je neaktivan",
-        "neaktivan oglas",
-        "nije dostupan",
-        "nije pronađen",
-        "nije pronaden",
-        "ne postoji",
-        "uklonjen",
-        "nema više na raspolaganju",
-        "nema vise na raspolaganju",
-        "pronjuškaj slične oglase",
-    )
-    return any(p in body_l for p in sold_phrases)
+    # Glavni banner prodanog oglasa (npr. Sv. Klara 50764828)
+    return "ovaj oglas je prodan" in body_top
 
 
 def check_saved_ads(page) -> tuple[list[str], int]:
