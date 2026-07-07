@@ -267,6 +267,11 @@ def _is_sold_or_removed(body_snippet: str, page_html: str = "") -> bool:
     return "ovaj oglas je prodan" in html_chunk
 
 
+def _is_ad_gone(ad_id: int, current_url: str) -> bool:
+    """Oglas uklonjen/prodan ako URL vise ne sadrzi oglas-ID."""
+    return f"oglas-{ad_id}" not in (current_url or "").lower()
+
+
 def check_saved_ads(page) -> tuple[list[str], int]:
     """Provjerava cijene spremljenih oglasa. Vraca (poruke, broj preskocenih CAPTCHA)."""
     conn = sqlite3.connect(DB_FILE)
@@ -310,10 +315,12 @@ def check_saved_ads(page) -> tuple[list[str], int]:
             skipped_captcha += 1
             continue
 
-        # Redirect na pretragu/home — cesto bot-blok, NE brisati
-        if "/pretraga" in current_url or current_url.rstrip("/") == "https://www.njuskalo.hr":
-            print(f"    [!] Redirect za saved ad {ad_id}, preskacem")
-            skipped_captcha += 1
+        if _is_ad_gone(ad_id, current_url):
+            conn = sqlite3.connect(DB_FILE)
+            conn.execute("DELETE FROM saved_ads WHERE id = ?", (ad_id,))
+            conn.commit()
+            conn.close()
+            messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
             continue
 
         try:
@@ -613,6 +620,8 @@ def run():
 
     total_new = 0
     telegram_body = ""
+    saved_messages: list[str] = []
+    skipped_saved = 0
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -654,6 +663,12 @@ def run():
                 pass
         except Exception:
             pass
+
+        # Spremljeni oglasi PRVO — prioritet nad kategorijama
+        print("\n[S] Provjera spremljenih oglasa...")
+        saved_messages, skipped_saved = check_saved_ads(page)
+        if saved_messages:
+            print(f"  [!] {len(saved_messages)} promjena na spremljenim oglasima")
 
         # Obradi svaki URL
         categories = list(URLS.keys())
@@ -705,30 +720,33 @@ def run():
             if idx < len(categories) - 1:
                 time.sleep(DELAY_BETWEEN_URLS)
 
-        # ------------------------------------------------------------------
-        # Provjera spremljenih oglasa (price tracking)
-        # ------------------------------------------------------------------
-        saved_messages, _ = check_saved_ads(page)
-        if saved_messages:
-            print(f"\n[S] Promjene na spremljenim oglasima: {len(saved_messages)}")
-            telegram_body += "\n<b>━━━ SPREMLJENI OGLASI ━━━</b>\n"
-            for msg in saved_messages:
-                telegram_body += msg + "\n\n"
-                print(f"  [!] {msg.split(chr(10))[0]}")
-
         browser.close()
 
     export_saved_ads_to_json()
 
-    # Salji Telegram samo kad ima stvarnih događaja (novi oglasi ili promjene cijena / prodano)
     if not first_run and telegram_configured():
-        if total_new > 0 or saved_messages:
-            header = (
-                f"🆕 <b>NJUSKALO - NOVI OGLASI</b>\n"
-                f"📅 {time.strftime('%d.%m.%Y. %H:%M')}\n"
-                f"━━━━━━━━━━━━━━━━━━━━"
+        ts = time.strftime("%d.%m.%Y. %H:%M")
+        if saved_messages:
+            saved_body = "\n".join(saved_messages)
+            send_telegram(
+                f"📌 <b>SPREMLJENI OGLASI</b>\n"
+                f"📅 {ts}\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n\n"
+                + saved_body
             )
-            send_telegram(header + telegram_body)
+        if total_new > 0:
+            send_telegram(
+                f"🆕 <b>NJUSKALO - NOVI OGLASI</b>\n"
+                f"📅 {ts}\n"
+                f"━━━━━━━━━━━━━━━━━━━━"
+                + telegram_body
+            )
+        if skipped_saved > 0:
+            send_telegram(
+                f"⚠️ <b>UPOZORENJE</b>\n"
+                f"📅 {ts}\n"
+                f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok)."
+            )
     elif first_run and total_new > 0:
         print(f"\n[i] Inicijalno spremljeno {total_new} oglasa u bazu (bez obavijesti)")
 
