@@ -255,16 +255,20 @@ def export_saved_ads_to_json():
 
 
 def _is_sold_or_removed(body_snippet: str, page_html: str = "") -> bool:
-    """Prodani oglas na Njuskalu cesto i dalje prikazuje cijenu.
+    """Prodani/neaktivan oglas na Njuskalu cesto i dalje prikazuje cijenu.
 
     PAZNJA: naslov SVIH nekretnina na prodaju ima sufiks '(prodaja)' — to NIJE prodano!
-    Jedini pouzdan signal je banner 'Ovaj oglas je prodan.'
+    Pouzdani signali su banneri na vrhu stranice oglasa.
     """
+    sold_phrases = (
+        "ovaj oglas je prodan",
+        "ovaj oglas je neaktivan",
+    )
     body_top = (body_snippet or "")[:2500].lower()
-    if "ovaj oglas je prodan" in body_top:
+    if any(p in body_top for p in sold_phrases):
         return True
     html_chunk = (page_html or "")[:20000].lower()
-    return "ovaj oglas je prodan" in html_chunk
+    return any(p in html_chunk for p in sold_phrases)
 
 
 def _is_ad_gone(ad_id: int, current_url: str) -> bool:
