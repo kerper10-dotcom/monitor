@@ -96,9 +96,11 @@ TELEGRAM_MAX_CHARS = 4000
 # Postavi na None ako zelis SVE oglase bez obzira na datum
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
-# Gone oglase (prodano/neaktivno) ne otvaraj svaki sat — manje opterećenje / CAPTCHA.
-# Aktivni oglasi i dalje se gledaju svaki run (cijena, prodano).
-GONE_RECHECK_HOURS = 24
+# Gone oglase (prodano/neaktivno): ne otvaraj svaki sat.
+# Jednom dnevno u 23:xx Europe/Zagreb (prvi satni run u tom satu, npr. 23:05)
+# bot prolazi SVE spremljene (uklj. gone) — detekcija povratka "PONOVO AKTIVAN".
+# Override: SAVED_ADS_MODE=active|all
+GONE_RECHECK_HOUR_ZAGREB = 23
 
 
 # =============================================================================
@@ -316,25 +318,39 @@ def _mark_saved_status(ad_id: int, status: str, title=None, last_price=None, las
     conn.close()
 
 
-def _last_checked_older_than(last_checked: str | None, hours: float) -> bool:
-    """True ako last_checked nema ili je stariji od `hours` sati."""
-    if not last_checked:
-        return True
-    for fmt in ("%d.%m.%Y. %H:%M", "%d.%m.%Y %H:%M", "%d.%m.%Y"):
-        try:
-            dt = datetime.strptime(last_checked.strip(), fmt)
-            return (datetime.now() - dt).total_seconds() >= hours * 3600
-        except ValueError:
-            continue
-    return True
+def _zagreb_now() -> datetime:
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo("Europe/Zagreb"))
+    except Exception:
+        return datetime.now()
+
+
+def get_saved_ads_mode() -> str:
+    """active = samo aktivni (satni run); all = svi uklj. gone (vecernji recheck)."""
+    env = os.environ.get("SAVED_ADS_MODE", "").strip().lower()
+    if env in ("active", "all"):
+        return env
+    # Jednom dnevno u 23:xx po Zagrebu (npr. Actions u 23:05 lokalno)
+    if _zagreb_now().hour == GONE_RECHECK_HOUR_ZAGREB:
+        return "all"
+    return "active"
 
 
 def check_saved_ads(page) -> tuple[list[str], int]:
     """Provjerava cijene spremljenih oglasa. Vraca (poruke, broj preskocenih CAPTCHA).
 
-    Aktivni oglasi: svaki run (cijena, prodano/neaktivno).
-    Gone oglasi: samo jednom u GONE_RECHECK_HOURS (default 24h) — manje HTTP zahtjeva.
+    Mode active (default, satni run): samo status=active.
+    Mode all (23:xx Zagreb ili SAVED_ADS_MODE=all): svi oglasi — i gone (povratak).
     """
+    mode = get_saved_ads_mode()
+    z = _zagreb_now()
+    print(
+        f"  [i] saved_ads mode={mode} | Zagreb {z.strftime('%d.%m.%Y. %H:%M')} "
+        f"(gone recheck u {GONE_RECHECK_HOUR_ZAGREB}:xx)"
+    )
+
     conn = sqlite3.connect(DB_FILE)
     cur = conn.execute(
         "SELECT id, title, url, saved_price, last_price, "
@@ -348,16 +364,16 @@ def check_saved_ads(page) -> tuple[list[str], int]:
 
     messages = []
     skipped_captcha = 0
-    skipped_gone_recent = 0
+    skipped_gone_until_evening = 0
     checked = 0
     now = time.strftime("%d.%m.%Y. %H:%M")
 
     for ad_id, title, url, saved_price, last_price, status, last_checked in saved:
         status = status or "active"
 
-        # Gone: ne otvaraj stranicu svaki sat — samo 1x / 24h (ili GONE_RECHECK_HOURS)
-        if status == "gone" and not _last_checked_older_than(last_checked, GONE_RECHECK_HOURS):
-            skipped_gone_recent += 1
+        # Satni run: ne otvaraj gone — cekaj vecernji full pass u 23:xx Zagreb
+        if mode == "active" and status == "gone":
+            skipped_gone_until_evening += 1
             continue
 
         try:
@@ -530,15 +546,15 @@ def check_saved_ads(page) -> tuple[list[str], int]:
         conn.commit()
         conn.close()
 
-    if skipped_gone_recent:
+    if skipped_gone_until_evening:
         print(
-            f"  [i] Preskoceno {skipped_gone_recent} gone oglasa "
-            f"(recheck tek za {GONE_RECHECK_HOURS}h)"
+            f"  [i] Preskoceno {skipped_gone_until_evening} gone oglasa "
+            f"(full recheck u {GONE_RECHECK_HOUR_ZAGREB}:xx Zagreb)"
         )
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
     if checked:
-        print(f"  [i] Provjereno {checked} spremljenih oglasa")
+        print(f"  [i] Provjereno {checked} spremljenih oglasa (mode={mode})")
     if messages:
         print(f"  [!] {len(messages)} promjena detektirano")
 
