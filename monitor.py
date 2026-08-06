@@ -129,9 +129,14 @@ def init_db():
         "  saved_price REAL,"
         "  saved_date TEXT,"
         "  last_price TEXT,"
-        "  last_checked TEXT"
+        "  last_checked TEXT,"
+        "  status TEXT DEFAULT 'active'"
         ")"
     )
+    try:
+        conn.execute("ALTER TABLE saved_ads ADD COLUMN status TEXT DEFAULT 'active'")
+    except sqlite3.OperationalError:
+        pass
 
     conn.commit()
     conn.close()
@@ -213,17 +218,25 @@ def sync_saved_ads_from_json():
     added = updated = removed = 0
 
     for ad in ads:
+        status = ad.get("status") or "active"
         if conn.execute("SELECT 1 FROM saved_ads WHERE id = ?", (ad["id"],)).fetchone():
-            conn.execute(
-                "UPDATE saved_ads SET title = ?, url = ?, saved_date = ? WHERE id = ?",
-                (ad["title"], ad["url"], ad.get("saved_date"), ad["id"]),
-            )
+            # Ne overwrite-aj status=gone iz baze ako JSON nema status (stari export)
+            if "status" in ad:
+                conn.execute(
+                    "UPDATE saved_ads SET title = ?, url = ?, saved_date = ?, status = ? WHERE id = ?",
+                    (ad["title"], ad["url"], ad.get("saved_date"), status, ad["id"]),
+                )
+            else:
+                conn.execute(
+                    "UPDATE saved_ads SET title = ?, url = ?, saved_date = ? WHERE id = ?",
+                    (ad["title"], ad["url"], ad.get("saved_date"), ad["id"]),
+                )
             updated += 1
         else:
             conn.execute(
-                "INSERT INTO saved_ads (id, title, url, saved_price, saved_date) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (ad["id"], ad["title"], ad["url"], ad.get("saved_price"), ad.get("saved_date")),
+                "INSERT INTO saved_ads (id, title, url, saved_price, saved_date, status) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (ad["id"], ad["title"], ad["url"], ad.get("saved_price"), ad.get("saved_date"), status),
             )
             added += 1
 
@@ -243,13 +256,21 @@ def sync_saved_ads_from_json():
 def export_saved_ads_to_json():
     conn = sqlite3.connect(DB_FILE)
     rows = conn.execute(
-        "SELECT id, title, url, saved_price, saved_date FROM saved_ads ORDER BY id"
+        "SELECT id, title, url, saved_price, saved_date, COALESCE(status, 'active') "
+        "FROM saved_ads ORDER BY id"
     ).fetchall()
     conn.close()
-    ads = [
-        {"id": r[0], "title": r[1], "url": r[2], "saved_price": r[3], "saved_date": r[4]}
-        for r in rows
-    ]
+    ads = []
+    for r in rows:
+        ad = {
+            "id": r[0],
+            "title": r[1],
+            "url": r[2],
+            "saved_price": r[3],
+            "saved_date": r[4],
+            "status": r[5] or "active",
+        }
+        ads.append(ad)
     with open(SAVED_ADS_FILE, "w", encoding="utf-8") as f:
         json.dump(ads, f, ensure_ascii=False, indent=2)
 
@@ -276,10 +297,31 @@ def _is_ad_gone(ad_id: int, current_url: str) -> bool:
     return f"oglas-{ad_id}" not in (current_url or "").lower()
 
 
-def check_saved_ads(page) -> tuple[list[str], int]:
-    """Provjerava cijene spremljenih oglasa. Vraca (poruke, broj preskocenih CAPTCHA)."""
+def _mark_saved_status(ad_id: int, status: str, title=None, last_price=None, last_checked=None, saved_price=None):
     conn = sqlite3.connect(DB_FILE)
-    cur = conn.execute("SELECT id, title, url, saved_price, last_price FROM saved_ads")
+    conn.execute(
+        "UPDATE saved_ads SET status = ?, "
+        "title = COALESCE(?, title), "
+        "last_price = COALESCE(?, last_price), "
+        "last_checked = COALESCE(?, last_checked), "
+        "saved_price = COALESCE(?, saved_price) "
+        "WHERE id = ?",
+        (status, title, last_price, last_checked, saved_price, ad_id),
+    )
+    conn.commit()
+    conn.close()
+
+
+def check_saved_ads(page) -> tuple[list[str], int]:
+    """Provjerava cijene spremljenih oglasa. Vraca (poruke, broj preskocenih CAPTCHA).
+
+    Oglasi koji nestanu (prodano/neaktivno/uklonjeno) ostaju u bazi sa status=gone
+    i i dalje se provjeravaju — ako se vrate, salje se PONOVO AKTIVAN.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.execute(
+        "SELECT id, title, url, saved_price, last_price, COALESCE(status, 'active') FROM saved_ads"
+    )
     saved = cur.fetchall()
     conn.close()
 
@@ -291,7 +333,8 @@ def check_saved_ads(page) -> tuple[list[str], int]:
     checked = 0
     now = time.strftime("%d.%m.%Y. %H:%M")
 
-    for ad_id, title, url, saved_price, last_price in saved:
+    for ad_id, title, url, saved_price, last_price, status in saved:
+        status = status or "active"
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=20000)
             page.wait_for_timeout(1500)
@@ -320,11 +363,11 @@ def check_saved_ads(page) -> tuple[list[str], int]:
             continue
 
         if _is_ad_gone(ad_id, current_url):
-            conn = sqlite3.connect(DB_FILE)
-            conn.execute("DELETE FROM saved_ads WHERE id = ?", (ad_id,))
-            conn.commit()
-            conn.close()
-            messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
+            if status != "gone":
+                _mark_saved_status(ad_id, "gone", title=title, last_checked=now)
+                messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
+            else:
+                _mark_saved_status(ad_id, "gone", last_checked=now)
             continue
 
         try:
@@ -337,11 +380,11 @@ def check_saved_ads(page) -> tuple[list[str], int]:
             page_html = ""
 
         if _is_sold_or_removed(body_snippet, page_html):
-            conn = sqlite3.connect(DB_FILE)
-            conn.execute("DELETE FROM saved_ads WHERE id = ?", (ad_id,))
-            conn.commit()
-            conn.close()
-            messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
+            if status != "gone":
+                _mark_saved_status(ad_id, "gone", title=title or page_title, last_checked=now)
+                messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
+            else:
+                _mark_saved_status(ad_id, "gone", last_checked=now)
             continue
 
         # Dohvati trenutnu cijenu (robustnije - DOM + fallback na sadržaj i JSON)
@@ -420,7 +463,27 @@ def check_saved_ads(page) -> tuple[list[str], int]:
         current_num = _extract_price_num(current_price_text)
         saved_num = float(saved_price) if saved_price else None
 
-        # Detektiraj promjenu
+        # Oglas se vratio (isti ID, ponovno aktivan)
+        if status == "gone":
+            messages.append(
+                f"🔄 <b>PONOVO AKTIVAN</b>\n"
+                f"<b>{title}</b>\n"
+                f"💰 {current_price_text}\n"
+                f"🔗 {url}"
+            )
+            if current_num is not None:
+                saved_price = current_num
+            _mark_saved_status(
+                ad_id,
+                "active",
+                title=title,
+                last_price=current_price_text,
+                last_checked=now,
+                saved_price=saved_price,
+            )
+            continue
+
+        # Detektiraj promjenu cijene
         if saved_num is not None and current_num is not None and current_num != saved_num:
             direction = "📈 PORASLA" if current_num > saved_num else "📉 PALA"
             old_price_str = f"{saved_price:.0f} €"
@@ -432,10 +495,11 @@ def check_saved_ads(page) -> tuple[list[str], int]:
             )
             saved_price = current_num
 
-        # Spremi u bazu
+        # Spremi u bazu (aktivan)
         conn = sqlite3.connect(DB_FILE)
         conn.execute(
-            "UPDATE saved_ads SET last_price = ?, last_checked = ?, title = ?, saved_price = ? WHERE id = ?",
+            "UPDATE saved_ads SET last_price = ?, last_checked = ?, title = ?, "
+            "saved_price = ?, status = 'active' WHERE id = ?",
             (current_price_text, now, title, saved_price, ad_id),
         )
         conn.commit()
