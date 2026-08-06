@@ -1,9 +1,13 @@
-name: Njuskalo Monitor
+name: Njuskalo Evening Full Check
 
-# Public repo = unlimited free Actions minutes. Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+# Full pass svih spremljenih (uklj. gone). Forsira SAVED_ADS_MODE=all.
+# Cron u 21:05 i 22:05 UTC pokriva 23:05 CEST / CET; job se izvrsi samo
+# kad je u Zagrebu sat 23 (jednom dnevno).
+# Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 on:
   schedule:
-    - cron: "5 * * * *"
+    - cron: "5 21 * * *"
+    - cron: "5 22 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -14,32 +18,50 @@ permissions:
   contents: write
 
 jobs:
-  monitor:
+  monitor-evening:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:
+      - name: Only run at 23:xx Europe/Zagreb
+        id: when
+        run: |
+          H=$(TZ=Europe/Zagreb date +%H)
+          echo "Zagreb hour=$H"
+          if [ "$H" = "23" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skip — not 23:xx Zagreb"
+          fi
+
       - name: Checkout repo
+        if: steps.when.outputs.run == 'true'
         uses: actions/checkout@v4
 
       - name: Setup Python
+        if: steps.when.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: steps.when.outputs.run == 'true'
         run: |
           pip install -r requirements.txt
           playwright install chromium --with-deps
 
-      - name: Run monitor
+      - name: Run full saved-ads check
+        if: steps.when.outputs.run == 'true'
         env:
           TZ: Europe/Zagreb
+          SAVED_ADS_MODE: all
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python monitor.py
 
       - name: Commit DB and saved_ads changes
+        if: steps.when.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

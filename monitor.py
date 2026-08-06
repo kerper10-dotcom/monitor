@@ -338,10 +338,11 @@ def get_saved_ads_mode() -> str:
     return "active"
 
 
-def check_saved_ads(page) -> tuple[list[str], int]:
-    """Provjerava cijene spremljenih oglasa. Vraca (poruke, broj preskocenih CAPTCHA).
+def check_saved_ads(page) -> tuple[list[str], int, dict]:
+    """Provjerava cijene spremljenih oglasa.
 
-    Mode active (default, satni run): samo status=active.
+    Vraca (poruke, broj_captcha, stats).
+    Mode active (satni run): samo status=active.
     Mode all (23:xx Zagreb ili SAVED_ADS_MODE=all): svi oglasi — i gone (povratak).
     """
     mode = get_saved_ads_mode()
@@ -359,13 +360,21 @@ def check_saved_ads(page) -> tuple[list[str], int]:
     saved = cur.fetchall()
     conn.close()
 
+    empty_stats = {
+        "mode": mode,
+        "checked": 0,
+        "total": 0,
+        "skipped_gone": 0,
+        "reactivated": 0,
+    }
     if not saved:
-        return [], 0
+        return [], 0, empty_stats
 
     messages = []
     skipped_captcha = 0
     skipped_gone_until_evening = 0
     checked = 0
+    reactivated = 0
     now = time.strftime("%d.%m.%Y. %H:%M")
 
     for ad_id, title, url, saved_price, last_price, status, last_checked in saved:
@@ -506,6 +515,7 @@ def check_saved_ads(page) -> tuple[list[str], int]:
 
         # Oglas se vratio (isti ID, ponovno aktivan)
         if status == "gone":
+            reactivated += 1
             messages.append(
                 f"🔄 <b>PONOVO AKTIVAN</b>\n"
                 f"<b>{title}</b>\n"
@@ -558,7 +568,14 @@ def check_saved_ads(page) -> tuple[list[str], int]:
     if messages:
         print(f"  [!] {len(messages)} promjena detektirano")
 
-    return messages, skipped_captcha
+    stats = {
+        "mode": mode,
+        "checked": checked,
+        "total": len(saved),
+        "skipped_gone": skipped_gone_until_evening,
+        "reactivated": reactivated,
+    }
+    return messages, skipped_captcha, stats
 
 
 def _extract_price_num(price_text: str) -> float | None:
@@ -736,6 +753,7 @@ def run():
     telegram_body = ""
     saved_messages: list[str] = []
     skipped_saved = 0
+    saved_stats: dict = {"mode": "active", "checked": 0, "total": 0, "skipped_gone": 0, "reactivated": 0}
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -780,7 +798,7 @@ def run():
 
         # Spremljeni oglasi PRVO — prioritet nad kategorijama
         print("\n[S] Provjera spremljenih oglasa...")
-        saved_messages, skipped_saved = check_saved_ads(page)
+        saved_messages, skipped_saved, saved_stats = check_saved_ads(page)
         if saved_messages:
             print(f"  [!] {len(saved_messages)} promjena na spremljenim oglasima")
 
@@ -860,6 +878,16 @@ def run():
                 f"⚠️ <b>UPOZORENJE</b>\n"
                 f"📅 {ts}\n"
                 f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok)."
+            )
+        # Vecernji full pass: uvijek potvrda da je run prosao (cak i bez promjena)
+        if saved_stats.get("mode") == "all":
+            send_telegram(
+                f"🌙 <b>VEČERNJA PROVJERA</b>\n"
+                f"📅 {ts}\n"
+                f"Provjereno: {saved_stats.get('checked', 0)}/{saved_stats.get('total', 0)} oglasa\n"
+                f"Ponovo aktivno: {saved_stats.get('reactivated', 0)}\n"
+                f"Promjena: {len(saved_messages)}\n"
+                f"CAPTCHA skip: {skipped_saved}"
             )
     elif first_run and total_new > 0:
         print(f"\n[i] Inicijalno spremljeno {total_new} oglasa u bazu (bez obavijesti)")
