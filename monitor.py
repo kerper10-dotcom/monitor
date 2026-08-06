@@ -96,6 +96,10 @@ TELEGRAM_MAX_CHARS = 4000
 # Postavi na None ako zelis SVE oglase bez obzira na datum
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
+# Gone oglase (prodano/neaktivno) ne otvaraj svaki sat — manje opterećenje / CAPTCHA.
+# Aktivni oglasi i dalje se gledaju svaki run (cijena, prodano).
+GONE_RECHECK_HOURS = 24
+
 
 # =============================================================================
 #  SQLite BAZA
@@ -312,15 +316,29 @@ def _mark_saved_status(ad_id: int, status: str, title=None, last_price=None, las
     conn.close()
 
 
+def _last_checked_older_than(last_checked: str | None, hours: float) -> bool:
+    """True ako last_checked nema ili je stariji od `hours` sati."""
+    if not last_checked:
+        return True
+    for fmt in ("%d.%m.%Y. %H:%M", "%d.%m.%Y %H:%M", "%d.%m.%Y"):
+        try:
+            dt = datetime.strptime(last_checked.strip(), fmt)
+            return (datetime.now() - dt).total_seconds() >= hours * 3600
+        except ValueError:
+            continue
+    return True
+
+
 def check_saved_ads(page) -> tuple[list[str], int]:
     """Provjerava cijene spremljenih oglasa. Vraca (poruke, broj preskocenih CAPTCHA).
 
-    Oglasi koji nestanu (prodano/neaktivno/uklonjeno) ostaju u bazi sa status=gone
-    i i dalje se provjeravaju — ako se vrate, salje se PONOVO AKTIVAN.
+    Aktivni oglasi: svaki run (cijena, prodano/neaktivno).
+    Gone oglasi: samo jednom u GONE_RECHECK_HOURS (default 24h) — manje HTTP zahtjeva.
     """
     conn = sqlite3.connect(DB_FILE)
     cur = conn.execute(
-        "SELECT id, title, url, saved_price, last_price, COALESCE(status, 'active') FROM saved_ads"
+        "SELECT id, title, url, saved_price, last_price, "
+        "COALESCE(status, 'active'), last_checked FROM saved_ads"
     )
     saved = cur.fetchall()
     conn.close()
@@ -330,11 +348,18 @@ def check_saved_ads(page) -> tuple[list[str], int]:
 
     messages = []
     skipped_captcha = 0
+    skipped_gone_recent = 0
     checked = 0
     now = time.strftime("%d.%m.%Y. %H:%M")
 
-    for ad_id, title, url, saved_price, last_price, status in saved:
+    for ad_id, title, url, saved_price, last_price, status, last_checked in saved:
         status = status or "active"
+
+        # Gone: ne otvaraj stranicu svaki sat — samo 1x / 24h (ili GONE_RECHECK_HOURS)
+        if status == "gone" and not _last_checked_older_than(last_checked, GONE_RECHECK_HOURS):
+            skipped_gone_recent += 1
+            continue
+
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=20000)
             page.wait_for_timeout(1500)
@@ -505,6 +530,11 @@ def check_saved_ads(page) -> tuple[list[str], int]:
         conn.commit()
         conn.close()
 
+    if skipped_gone_recent:
+        print(
+            f"  [i] Preskoceno {skipped_gone_recent} gone oglasa "
+            f"(recheck tek za {GONE_RECHECK_HOURS}h)"
+        )
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
     if checked:
