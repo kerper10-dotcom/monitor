@@ -144,6 +144,14 @@
     "status": "active"
   },
   {
+    "id": 48469048,
+    "title": "IPHONE 17 PRO MAX 256 GB NOV ZAPAKIRAN U TRGOVINI",
+    "url": "https://www.njuskalo.hr/iphone-17-pro-max/iphone-17-pro-max-512-gb-nov-zapakiran-trgovini-oglas-48469048",
+    "saved_price": 1199.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
+  },
+  {
     "id": 48476958,
     "title": "Stan: Zadar-Bulevar,dvosoban stan, II.kat,62.00 m2, zgrada u izgradnji",
     "url": "https://www.njuskalo.hr/nekretnine/stan-zadar-bulevar-dvosoban-stan-ii-kat-62.00-m2-zgrada-izgradnji-oglas-48476958",
@@ -320,6 +328,14 @@
     "status": "active"
   },
   {
+    "id": 49851124,
+    "title": "KUĆA visoka PRIZEMNICA 110 / 540 m2- nadomak Zadra",
+    "url": "https://www.njuskalo.hr/nekretnine/kuca-visoka-prizemnica-110-540-m2-nadomak-zadra-oglas-49851124",
+    "saved_price": 320000.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
+  },
+  {
     "id": 49851299,
     "title": "Zadar -Ploča -građevinsko zemljište",
     "url": "https://www.njuskalo.hr/nekretnine/zadar-ploca-gradevinsko-zemljiste-oglas-49851299",
@@ -389,6 +405,22 @@
     "url": "https://www.njuskalo.hr/nekretnine/zadar-turanj-sveti-filip-jakov-gradevinsko-zemljiste-obiteljsk-oglas-50072822",
     "saved_price": 100000.0,
     "saved_date": "06.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 50094360,
+    "title": "Stan Zagreb: Trnje 38m2 (NOVOUREĐENO)",
+    "url": "https://www.njuskalo.hr/nekretnine/stan-zagreb-trnje-38m2-novouredeno-oglas-50094360",
+    "saved_price": 174990.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 50100790,
+    "title": "Stan Zagreb: Trnje 34m2 (NOVOUREĐENO)",
+    "url": "https://www.njuskalo.hr/nekretnine/stan-zagreb-trnje-34m2-novouredeno-oglas-50100790",
+    "saved_price": 164990.0,
+    "saved_date": "11.08.2026",
     "status": "active"
   },
   {
@@ -462,6 +494,14 @@
     "saved_price": 158000.0,
     "saved_date": "20.06.2026",
     "status": "gone"
+  },
+  {
+    "id": 50399996,
+    "title": "Samobor, Bregana, 74.20 m2",
+    "url": "https://www.njuskalo.hr/nekretnine/samobor-bregana-74-m2-oglas-50399996",
+    "saved_price": 190000.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
   },
   {
     "id": 50425342,
@@ -733,6 +773,14 @@
     "url": "https://www.njuskalo.hr/nekretnine/dugo-selo-dvosoban-stan-51.00-m2-garaznim-parkirnim-mjestom-oglas-50851517",
     "saved_price": 169900.0,
     "saved_date": "30.07.2026",
+    "status": "active"
+  },
+  {
+    "id": 50855720,
+    "title": "Kompletno renoviran i namješten stan",
+    "url": "https://www.njuskalo.hr/nekretnine/kompletno-renoviran-namjesten-stan-oglas-50855720",
+    "saved_price": 270000.0,
+    "saved_date": "11.08.2026",
     "status": "active"
   },
   {
@@ -1024,6 +1072,14 @@
     "status": "active"
   },
   {
+    "id": 51097488,
+    "title": "Toyota Yaris 1,5 Hybrid, Automatik, Sol oprema",
+    "url": "https://www.njuskalo.hr/auti/toyota-yaris-1.5-hybrid-automatik-sol-oprema-oglas-51097488",
+    "saved_price": 18500.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
+  },
+  {
     "id": 51099621,
     "title": "MacBook Pro 16 M3 Pro 18GB 512GB",
     "url": "https://www.njuskalo.hr/apple-macbook/macbook-pro-16-m3-pro-18gb-512gb-oglas-51099621",
@@ -1073,7 +1129,7 @@
   },
   {
     "id": 51157352,
-    "title": "Stan: Zagreb (Stenjevec), 35.95 m2",
+    "title": "Stan: Zagreb (Stenjevec), NKP 40,3 m2",
     "url": "https://www.njuskalo.hr/nekretnine/stan-zagreb-stenjevec-35.95-m2-oglas-51157352",
     "saved_price": 163000.0,
     "saved_date": "06.08.2026",
@@ -1085,6 +1141,54 @@
     "url": "https://www.njuskalo.hr/apple-macbook/16-macbook-pro-3-oglas-51159567",
     "saved_price": 1790.0,
     "saved_date": "06.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51164260,
+    "title": "Apple IPhone 15 Pro Max",
+    "url": "https://www.njuskalo.hr/iphone-15-pro-max/apple-iphone-15-pro-max-oglas-51164260",
+    "saved_price": 599.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51165160,
+    "title": "Toyota Yaris 1,5 Hybrid Aut.",
+    "url": "https://www.njuskalo.hr/auti/toyota-yaris-1.5-hybrid-aut-oglas-51165160",
+    "saved_price": 14800.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51169685,
+    "title": "iPhone 16 Pro Max 256gb KAO NOV",
+    "url": "https://www.njuskalo.hr/iphone-16-pro-max/iphone-16-pro-max-256gb-kao-nov-oglas-51169685",
+    "saved_price": 749.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51172506,
+    "title": "Mercedes-Benz E-klasa 220 D AMG",
+    "url": "https://www.njuskalo.hr/auti/mercedes-benz-e-klasa-220-d-automatik-oglas-51172506",
+    "saved_price": 24500.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51175188,
+    "title": "Stenjevec, Samoborska c., namješten stan s balkonom i PM, NKP 40.36m2",
+    "url": "https://www.njuskalo.hr/nekretnine/stenjevec-samoborska-c-namjesten-stan-balkonom-pm-nkp-40.36m2-oglas-51175188",
+    "saved_price": 163000.0,
+    "saved_date": "11.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51181652,
+    "title": "Toyota Corolla 1,8 VVT-i automatik",
+    "url": "https://www.njuskalo.hr/auti/toyota-corolla-1.8-vvt-automatik-oglas-51181652",
+    "saved_price": 19400.0,
+    "saved_date": "11.08.2026",
     "status": "active"
   }
 ]
