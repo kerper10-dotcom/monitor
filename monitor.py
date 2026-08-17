@@ -366,6 +366,10 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "total": 0,
         "skipped_gone": 0,
         "reactivated": 0,
+        "visited": 0,
+        "still_gone": 0,
+        "no_price": 0,
+        "errors": 0,
     }
     if not saved:
         return [], 0, empty_stats
@@ -375,6 +379,10 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     skipped_gone_until_evening = 0
     checked = 0
     reactivated = 0
+    visited = 0
+    still_gone = 0
+    no_price = 0
+    errors = 0
     now = time.strftime("%d.%m.%Y. %H:%M")
 
     for ad_id, title, url, saved_price, last_price, status, last_checked in saved:
@@ -389,7 +397,10 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
             page.goto(url, wait_until="domcontentloaded", timeout=20000)
             page.wait_for_timeout(1500)
         except Exception:
+            errors += 1
             continue
+
+        visited += 1
 
         page_title = page.title()
 
@@ -413,6 +424,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
             continue
 
         if _is_ad_gone(ad_id, current_url):
+            still_gone += 1
             if status != "gone":
                 _mark_saved_status(ad_id, "gone", title=title, last_checked=now)
                 messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
@@ -430,6 +442,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
             page_html = ""
 
         if _is_sold_or_removed(body_snippet, page_html):
+            still_gone += 1
             if status != "gone":
                 _mark_saved_status(ad_id, "gone", title=title or page_title, last_checked=now)
                 messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
@@ -497,6 +510,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
 
         if not current_price_text:
             # NEMA brisanja kad cijena nije pronadjena — opisi oglasa sadrze "prodano" itd.
+            no_price += 1
             print(f"    [!] Nema cijene za saved ad {ad_id}, preskacem (nije prodano)")
             continue
 
@@ -574,6 +588,10 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "total": len(saved),
         "skipped_gone": skipped_gone_until_evening,
         "reactivated": reactivated,
+        "visited": visited,
+        "still_gone": still_gone,
+        "no_price": no_price,
+        "errors": errors,
     }
     return messages, skipped_captcha, stats
 
@@ -753,7 +771,17 @@ def run():
     telegram_body = ""
     saved_messages: list[str] = []
     skipped_saved = 0
-    saved_stats: dict = {"mode": "active", "checked": 0, "total": 0, "skipped_gone": 0, "reactivated": 0}
+    saved_stats: dict = {
+        "mode": "active",
+        "checked": 0,
+        "total": 0,
+        "skipped_gone": 0,
+        "reactivated": 0,
+        "visited": 0,
+        "still_gone": 0,
+        "no_price": 0,
+        "errors": 0,
+    }
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -884,7 +912,12 @@ def run():
             send_telegram(
                 f"🌙 <b>VEČERNJA PROVJERA</b>\n"
                 f"📅 {ts}\n"
-                f"Provjereno: {saved_stats.get('checked', 0)}/{saved_stats.get('total', 0)} oglasa\n"
+                f"U listi: {saved_stats.get('total', 0)}\n"
+                f"Otvoreno: {saved_stats.get('visited', 0)}\n"
+                f"Aktivnih (cijena OK): {saved_stats.get('checked', 0)}\n"
+                f"Još gone/prodano: {saved_stats.get('still_gone', 0)}\n"
+                f"Bez cijene: {saved_stats.get('no_price', 0)}\n"
+                f"Greška učitavanja: {saved_stats.get('errors', 0)}\n"
                 f"Ponovo aktivno: {saved_stats.get('reactivated', 0)}\n"
                 f"Promjena: {len(saved_messages)}\n"
                 f"CAPTCHA skip: {skipped_saved}"
