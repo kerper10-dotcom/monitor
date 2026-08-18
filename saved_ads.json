@@ -45,7 +45,7 @@
     "url": "https://www.njuskalo.hr/nekretnine/kuca-zadar-ukupne-povrsine-80.00-m2-oglas-44739009",
     "saved_price": 255000.0,
     "saved_date": "06.08.2026",
-    "status": "active"
+    "status": "gone"
   },
   {
     "id": 45304339,
@@ -1301,6 +1301,6 @@
     "url": "https://www.njuskalo.hr/apple-macbook/macbook-pro-m1-4k-16-inch-16gb-ram-500gb-ssd-pula-oglas-51227683",
     "saved_price": 650.0,
     "saved_date": "17.08.2026",
-    "status": "active"
+    "status": "gone"
   }
 ]
