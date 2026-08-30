@@ -1,5 +1,13 @@
 [
   {
+    "id": 15326148,
+    "title": "Relja, zgrada Kerum, poslovni prostor 25 m2",
+    "url": "https://www.njuskalo.hr/nekretnine/relja-zgrada-kerum-poslovni-prostor-25-m2-oglas-15326148",
+    "saved_price": 85000.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
     "id": 25923617,
     "title": "TRANSPORT / PRIJEVOZ VOZILA / VUČNA SLUŽBA",
     "url": "https://www.njuskalo.hr/transporti-selidbe/transport-prijevoz-vozila-oglas-25923617",
@@ -216,6 +224,14 @@
     "status": "active"
   },
   {
+    "id": 48972173,
+    "title": "Garsonijera u novogradnji s parkingom, Bijenik, 28 m2 - 3200€/m2",
+    "url": "https://www.njuskalo.hr/nekretnine/garsonijera-novogradnji-parkingom-bijenik-28-m2-oglas-48972173",
+    "saved_price": 90000.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
     "id": 48997027,
     "title": "Smoković, samostojeća kuća prizemnica s bazenom",
     "url": "https://www.njuskalo.hr/nekretnine/smokovic-samostojeca-kuca-prizemnica-bazenom-oglas-48997027",
@@ -312,6 +328,14 @@
     "status": "active"
   },
   {
+    "id": 49558090,
+    "title": "Renault Twingo Twizy automatik",
+    "url": "https://www.njuskalo.hr/auti/renault-twingo-twizy-automatik-oglas-49558090",
+    "saved_price": 5499.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
     "id": 49750381,
     "title": "Vir- Prizemnica s garažom 100m od plaže, top lokacija",
     "url": "https://www.njuskalo.hr/nekretnine/vir-prizemnica-garazom-100m-plaze-top-lokacija-oglas-49750381",
@@ -342,6 +366,14 @@
     "saved_price": 181900.0,
     "saved_date": "01.07.2026",
     "status": "gone"
+  },
+  {
+    "id": 49792151,
+    "title": "Veliko polje, centar, 2sobni penthouse, novi projekt",
+    "url": "https://www.njuskalo.hr/nekretnine/veliko-polje-centar-2sobni-penthouse-projekt-oglas-49792151",
+    "saved_price": 180425.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
   },
   {
     "id": 49835018,
@@ -561,7 +593,7 @@
   },
   {
     "id": 50484702,
-    "title": "ZADAR-NOVI BOKANJAC-Namještena kuća s 3 Stana-GARAŽA-VRT-USELJIVO!!",
+    "title": "[NOVI BOKANJAC] Namještena kuća s 3 Stana - GARAŽA - VRT - USELJIVO",
     "url": "https://www.njuskalo.hr/nekretnine/zadar-bokanjac-namjestena-kuca-3-stana-garaza-vrt-useljivo-oglas-50484702",
     "saved_price": 550000.0,
     "saved_date": "06.08.2026",
@@ -569,7 +601,7 @@
   },
   {
     "id": 50517166,
-    "title": "MURVICA - 604 m2 građevinsko zemljište",
+    "title": "MURVICA (Zadar)- 604 m2 građevinsko zemljište",
     "url": "https://www.njuskalo.hr/nekretnine/murvica-1.116-m2-gradevinsko-zemljiste-oglas-50517166",
     "saved_price": 90600.0,
     "saved_date": "30.07.2026",
@@ -753,7 +785,7 @@
   },
   {
     "id": 50823745,
-    "title": "MURVICA( Zadar) - 806 m2 građevinsko zemljište",
+    "title": "MURVICA (Zadar) - 659 m2 građevinsko zemljište",
     "url": "https://www.njuskalo.hr/nekretnine/murvica-zadar-806m2-gradevinsko-zemljiste-oglas-50823745",
     "saved_price": 115000.0,
     "saved_date": "19.07.2026",
@@ -1168,6 +1200,14 @@
     "status": "active"
   },
   {
+    "id": 51116454,
+    "title": "Aprilia SR GT 125 Sport",
+    "url": "https://www.njuskalo.hr/skuteri-preko-50/aprilia-sr-gt-125-sport-oglas-51116454",
+    "saved_price": 2900.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
     "id": 51139714,
     "title": "STAN, PRODAJA, DUGO SELO, CENTAR, 71 m2, 2-soban",
     "url": "https://www.njuskalo.hr/nekretnine/stan-prodaja-dugo-selo-centar-71-m2-2-soban-oglas-51139714",
@@ -1302,5 +1342,69 @@
     "saved_price": 650.0,
     "saved_date": "17.08.2026",
     "status": "gone"
+  },
+  {
+    "id": 51300319,
+    "title": "Komforan stan s krovnom terasom, novogradnja",
+    "url": "https://www.njuskalo.hr/nekretnine/komforan-stan-novogradnja-oglas-51300319",
+    "saved_price": 400000.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51319988,
+    "title": "MacBook Pro 16 2021/M1 PRO/32GB RAM/512GB SSD/16\" Retina-Izlog",
+    "url": "https://www.njuskalo.hr/apple-macbook/macbook-pro-16-2021-m1-pro-32gb-ram-512gb-ssd-16-retina-izlog-oglas-51319988",
+    "saved_price": 999.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51320935,
+    "title": "Toyota Yaris hibrid 1,5 HSD STELLA",
+    "url": "https://www.njuskalo.hr/auti/toyota-yaris-1.5-oglas-51320935",
+    "saved_price": 18500.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51340817,
+    "title": "MacBook Pro 16\" M1 Max 32 GB / 1 TB – Odlično stanje, kao nov",
+    "url": "https://www.njuskalo.hr/apple-macbook/macbook-pro-16-m1-max-32-gb-1-tb-odlicno-stanje-kao-nov-oglas-51340817",
+    "saved_price": 1400.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51360912,
+    "title": "ZADAR/PLOVANIJA -NAMJEŠTEN,DVOETAŽAN STAN,PRIZEMLJE S VRTOM 79 M2 !!!",
+    "url": "https://www.njuskalo.hr/nekretnine/zadar-plovanija-namjesten-dvoetazan-stan-prizemlje-vrtom-79-m2-oglas-51360912",
+    "saved_price": 260000.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51375833,
+    "title": "Dvosobni stan",
+    "url": "https://www.njuskalo.hr/nekretnine/dvosobni-stan-oglas-51375833",
+    "saved_price": 180000.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51391865,
+    "title": "CRNO - Građevinski teren s gotovim projektom obiteljske kuće - 750m2",
+    "url": "https://www.njuskalo.hr/nekretnine/crno-gradevinski-teren-gotovim-projektom-obiteljske-kuce-750m2-oglas-51391865",
+    "saved_price": 159900.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 51395872,
+    "title": "Macbook M1 pro 16gb/512gb",
+    "url": "https://www.njuskalo.hr/apple-macbook/macbook-m1-pro-16gb-512gb-oglas-51395872",
+    "saved_price": 700.0,
+    "saved_date": "30.08.2026",
+    "status": "active"
   }
 ]
