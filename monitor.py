@@ -370,12 +370,14 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "still_gone": 0,
         "no_price": 0,
         "errors": 0,
+        "captcha_ads": [],
     }
     if not saved:
         return [], 0, empty_stats
 
     messages = []
     skipped_captcha = 0
+    captcha_ads: list[tuple] = []
     skipped_gone_until_evening = 0
     checked = 0
     reactivated = 0
@@ -407,6 +409,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         # ShieldSquare CAPTCHA
         if "shieldsquare" in page_title.lower() or "captcha" in page_title.lower():
             skipped_captcha += 1
+            captcha_ads.append((ad_id, title, url))
             continue
 
         try:
@@ -415,12 +418,14 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
             body_probe = ""
         if "shieldsquare" in body_probe or "tamnu stranu" in body_probe:
             skipped_captcha += 1
+            captcha_ads.append((ad_id, title, url))
             continue
 
         # Provjeri redirect - ako URL vodi drugdje, oglas je uklonjen
         current_url = page.url
         if current_url != url and "njuskalo.hr" not in current_url:
             skipped_captcha += 1
+            captcha_ads.append((ad_id, title, url))
             continue
 
         if _is_ad_gone(ad_id, current_url):
@@ -592,6 +597,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "still_gone": still_gone,
         "no_price": no_price,
         "errors": errors,
+        "captcha_ads": captcha_ads,
     }
     return messages, skipped_captcha, stats
 
@@ -902,11 +908,13 @@ def run():
                 + telegram_body
             )
         if skipped_saved > 0:
-            send_telegram(
-                f"⚠️ <b>UPOZORENJE</b>\n"
-                f"📅 {ts}\n"
-                f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok)."
-            )
+            cap_lines = [
+                f"⚠️ <b>UPOZORENJE</b>\n📅 {ts}\n"
+                f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok).\n"
+            ]
+            for ad_id, title, url in (saved_stats.get("captcha_ads") or [])[:25]:
+                cap_lines.append(f"{ad_id} — {title or '?'}\n{url}")
+            send_telegram("\n".join(cap_lines))
         # Vecernji full pass: uvijek potvrda da je run prosao (cak i bez promjena)
         if saved_stats.get("mode") == "all":
             send_telegram(
