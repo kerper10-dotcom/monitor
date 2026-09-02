@@ -327,6 +327,178 @@ def _zagreb_now() -> datetime:
         return datetime.now()
 
 
+def _parse_last_checked(value: str | None) -> datetime:
+    if not value:
+        return datetime.min
+    for fmt in ("%d.%m.%Y. %H:%M", "%d.%m.%Y %H:%M", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(value.strip(), fmt)
+        except ValueError:
+            continue
+    return datetime.min
+
+
+def _fetch_price_text(page) -> str:
+    current_price_text = ""
+    for sel in [
+        ".price--hrk",
+        "strong.price",
+        "dl.ClassifiedDetailSummary-priceRow dd",
+        "[class*='priceDomestic']",
+        "[class*='priceValue']",
+        "[class*='Price']",
+    ]:
+        try:
+            el = page.locator(sel).first
+            if el.count() > 0:
+                txt = el.inner_text().strip()
+                if txt and "€" in txt:
+                    return txt
+        except Exception:
+            pass
+    try:
+        matches = re.findall(r'(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)\s*€', page.content())
+        if matches:
+            return matches[0] + " €"
+    except Exception:
+        pass
+    try:
+        price_json = page.evaluate('''() => {
+            const scripts = document.querySelectorAll('script[type="application/ld+json"], script#__NEXT_DATA__');
+            for (let s of scripts) {
+                try {
+                    let txt = s.textContent || '';
+                    if (txt.includes('price') || txt.includes('€')) {
+                        const data = JSON.parse(txt);
+                        if (data) {
+                            if (data.offers && data.offers.price) return data.offers.price + ' €';
+                            if (data.price) return data.price;
+                            const str = JSON.stringify(data);
+                            const m = str.match(/"price"\\s*:\\s*"([0-9. ]+ ?€?)"/i);
+                            if (m) return m[1];
+                        }
+                    }
+                } catch(e) {}
+            }
+            return "";
+        }''')
+        if price_json and "€" in str(price_json):
+            return str(price_json)
+    except Exception:
+        pass
+    return ""
+
+
+def _check_one_saved_ad(page, row, now: str) -> dict:
+    """Provjeri jedan spremljeni oglas. Vraca kind + optional message."""
+    ad_id, title, url, saved_price, last_price, status, last_checked = row
+    status = status or "active"
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=20000)
+        page.wait_for_timeout(1500)
+    except Exception:
+        return {"kind": "error"}
+
+    page_title = page.title()
+    if "shieldsquare" in page_title.lower() or "captcha" in page_title.lower():
+        return {"kind": "captcha", "ad": (ad_id, title, url)}
+
+    try:
+        body_probe = page.locator("body").inner_text()[:500].lower()
+    except Exception:
+        body_probe = ""
+    if "shieldsquare" in body_probe or "tamnu stranu" in body_probe:
+        return {"kind": "captcha", "ad": (ad_id, title, url)}
+
+    current_url = page.url
+    if current_url != url and "njuskalo.hr" not in current_url:
+        return {"kind": "captcha", "ad": (ad_id, title, url)}
+
+    if _is_ad_gone(ad_id, current_url):
+        if status != "gone":
+            _mark_saved_status(ad_id, "gone", title=title, last_checked=now)
+            return {
+                "kind": "sold",
+                "message": f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}",
+            }
+        _mark_saved_status(ad_id, "gone", last_checked=now)
+        return {"kind": "still_gone"}
+
+    try:
+        body_snippet = page.locator("body").inner_text()
+    except Exception:
+        body_snippet = ""
+    try:
+        page_html = page.content()
+    except Exception:
+        page_html = ""
+
+    if _is_sold_or_removed(body_snippet, page_html):
+        if status != "gone":
+            _mark_saved_status(ad_id, "gone", title=title or page_title, last_checked=now)
+            return {
+                "kind": "sold",
+                "message": f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}",
+            }
+        _mark_saved_status(ad_id, "gone", last_checked=now)
+        return {"kind": "still_gone"}
+
+    current_price_text = _fetch_price_text(page)
+    if not current_price_text:
+        print(f"    [!] Nema cijene za saved ad {ad_id}, preskacem (nije prodano)")
+        return {"kind": "no_price"}
+
+    if not title:
+        title = page_title.split(" - ")[0].strip()
+    if saved_price is None:
+        saved_price = _extract_price_num(current_price_text)
+    current_num = _extract_price_num(current_price_text)
+    saved_num = float(saved_price) if saved_price else None
+
+    if status == "gone":
+        if current_num is not None:
+            saved_price = current_num
+        _mark_saved_status(
+            ad_id,
+            "active",
+            title=title,
+            last_price=current_price_text,
+            last_checked=now,
+            saved_price=saved_price,
+        )
+        return {
+            "kind": "reactivated",
+            "message": (
+                f"🔄 <b>PONOVO AKTIVAN</b>\n"
+                f"<b>{title}</b>\n"
+                f"💰 {current_price_text}\n"
+                f"🔗 {url}"
+            ),
+        }
+
+    msg = None
+    if saved_num is not None and current_num is not None and current_num != saved_num:
+        direction = "📈 PORASLA" if current_num > saved_num else "📉 PALA"
+        old_price_str = f"{saved_price:.0f} €"
+        msg = (
+            f"{direction}\n<b>{title}</b>\n"
+            f"💾 Bilo: {old_price_str}\n"
+            f"💰 Sada: {current_price_text}\n"
+            f"🔗 {url}"
+        )
+        saved_price = current_num
+
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute(
+        "UPDATE saved_ads SET last_price = ?, last_checked = ?, title = ?, "
+        "saved_price = ?, status = 'active' WHERE id = ?",
+        (current_price_text, now, title, saved_price, ad_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"kind": "ok" if not msg else "price", "message": msg}
+
+
 def get_saved_ads_mode() -> str:
     """active = samo aktivni (satni run); all = svi uklj. gone (vecernji recheck)."""
     env = os.environ.get("SAVED_ADS_MODE", "").strip().lower()
@@ -387,193 +559,65 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     errors = 0
     now = time.strftime("%d.%m.%Y. %H:%M")
 
-    for ad_id, title, url, saved_price, last_price, status, last_checked in saved:
-        status = status or "active"
+    # Najstariji last_checked prvo — CAPTCHA zrtve iz proslog runa idu na pocetak,
+    # ne uvijek isti zadnji ID-ovi nakon sto Njuskalo pocne blokirati.
+    saved = sorted(saved, key=lambda r: (_parse_last_checked(r[6]), r[0]))
+    by_id = {r[0]: r for r in saved}
 
-        # Satni run: ne otvaraj gone — cekaj vecernji full pass u 23:xx Zagreb
+    def apply_result(res: dict, count_visit: bool = True):
+        nonlocal skipped_captcha, errors, visited, still_gone, no_price
+        nonlocal checked, reactivated
+        kind = res.get("kind")
+        if kind == "captcha":
+            skipped_captcha += 1
+            if count_visit:
+                visited += 1
+            if res.get("ad"):
+                captcha_ads.append(res["ad"])
+            return
+        if kind == "error":
+            errors += 1
+            return
+        if count_visit:
+            visited += 1
+        if kind == "still_gone":
+            still_gone += 1
+        elif kind == "sold":
+            still_gone += 1
+            if res.get("message"):
+                messages.append(res["message"])
+        elif kind == "no_price":
+            no_price += 1
+        elif kind == "reactivated":
+            checked += 1
+            reactivated += 1
+            if res.get("message"):
+                messages.append(res["message"])
+        elif kind in ("ok", "price"):
+            checked += 1
+            if res.get("message"):
+                messages.append(res["message"])
+
+    for row in saved:
+        status = row[5] or "active"
         if mode == "active" and status == "gone":
             skipped_gone_until_evening += 1
             continue
+        apply_result(_check_one_saved_ad(page, row, now))
 
-        try:
-            page.goto(url, wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_timeout(1500)
-        except Exception:
-            errors += 1
-            continue
-
-        visited += 1
-
-        page_title = page.title()
-
-        # ShieldSquare CAPTCHA
-        if "shieldsquare" in page_title.lower() or "captcha" in page_title.lower():
-            skipped_captcha += 1
-            captcha_ads.append((ad_id, title, url))
-            continue
-
-        try:
-            body_probe = page.locator("body").inner_text()[:500].lower()
-        except Exception:
-            body_probe = ""
-        if "shieldsquare" in body_probe or "tamnu stranu" in body_probe:
-            skipped_captcha += 1
-            captcha_ads.append((ad_id, title, url))
-            continue
-
-        # Provjeri redirect - ako URL vodi drugdje, oglas je uklonjen
-        current_url = page.url
-        if current_url != url and "njuskalo.hr" not in current_url:
-            skipped_captcha += 1
-            captcha_ads.append((ad_id, title, url))
-            continue
-
-        if _is_ad_gone(ad_id, current_url):
-            still_gone += 1
-            if status != "gone":
-                _mark_saved_status(ad_id, "gone", title=title, last_checked=now)
-                messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
-            else:
-                _mark_saved_status(ad_id, "gone", last_checked=now)
-            continue
-
-        try:
-            body_snippet = page.locator("body").inner_text()
-        except Exception:
-            body_snippet = ""
-        try:
-            page_html = page.content()
-        except Exception:
-            page_html = ""
-
-        if _is_sold_or_removed(body_snippet, page_html):
-            still_gone += 1
-            if status != "gone":
-                _mark_saved_status(ad_id, "gone", title=title or page_title, last_checked=now)
-                messages.append(f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}")
-            else:
-                _mark_saved_status(ad_id, "gone", last_checked=now)
-            continue
-
-        # Dohvati trenutnu cijenu (robustnije - DOM + fallback na sadržaj i JSON)
-        current_price_text = ""
-        # 1. Pokušaj DOM selectore
-        for sel in [
-            ".price--hrk",
-            "strong.price",
-            "dl.ClassifiedDetailSummary-priceRow dd",
-            "[class*='priceDomestic']",
-            "[class*='priceValue']",
-            "[class*='Price']",
-        ]:
-            try:
-                el = page.locator(sel).first
-                if el.count() > 0:
-                    txt = el.inner_text().strip()
-                    if txt and "€" in txt:
-                        current_price_text = txt
-                        break
-            except Exception:
-                pass
-
-        # 2. Fallback: regex na cijelom sadržaju stranice
-        if not current_price_text:
-            try:
-                body_text = page.content()
-                matches = re.findall(r'(\d{1,3}(?:\.\d{3})*(?:,\d{2})?)\s*€', body_text)
-                if matches:
-                    current_price_text = matches[0] + " €"
-            except Exception:
-                pass
-
-        # 3. Fallback: iz embedded JSON (često u __NEXT_DATA__ ili LD+JSON)
-        if not current_price_text:
-            try:
-                price_json = page.evaluate('''() => {
-                    const scripts = document.querySelectorAll('script[type="application/ld+json"], script#__NEXT_DATA__');
-                    for (let s of scripts) {
-                        try {
-                            let txt = s.textContent || '';
-                            if (txt.includes('price') || txt.includes('€')) {
-                                const data = JSON.parse(txt);
-                                if (data) {
-                                    if (data.offers && data.offers.price) return data.offers.price + ' €';
-                                    if (data.price) return data.price;
-                                    const str = JSON.stringify(data);
-                                    const m = str.match(/"price"\\s*:\\s*"([0-9. ]+ ?€?)"/i);
-                                    if (m) return m[1];
-                                }
-                            }
-                        } catch(e) {}
-                    }
-                    return "";
-                }''')
-                if price_json and "€" in str(price_json):
-                    current_price_text = str(price_json)
-            except Exception:
-                pass
-
-        if not current_price_text:
-            # NEMA brisanja kad cijena nije pronadjena — opisi oglasa sadrze "prodano" itd.
-            no_price += 1
-            print(f"    [!] Nema cijene za saved ad {ad_id}, preskacem (nije prodano)")
-            continue
-
-        checked += 1
-
-        # Azuriraj naslov
-        if not title:
-            title = page_title.split(" - ")[0].strip()
-
-        # Azuriraj saved_price ako je NULL
-        if saved_price is None:
-            saved_price = _extract_price_num(current_price_text)
-
-        current_num = _extract_price_num(current_price_text)
-        saved_num = float(saved_price) if saved_price else None
-
-        # Oglas se vratio (isti ID, ponovno aktivan)
-        if status == "gone":
-            reactivated += 1
-            messages.append(
-                f"🔄 <b>PONOVO AKTIVAN</b>\n"
-                f"<b>{title}</b>\n"
-                f"💰 {current_price_text}\n"
-                f"🔗 {url}"
-            )
-            if current_num is not None:
-                saved_price = current_num
-            _mark_saved_status(
-                ad_id,
-                "active",
-                title=title,
-                last_price=current_price_text,
-                last_checked=now,
-                saved_price=saved_price,
-            )
-            continue
-
-        # Detektiraj promjenu cijene
-        if saved_num is not None and current_num is not None and current_num != saved_num:
-            direction = "📈 PORASLA" if current_num > saved_num else "📉 PALA"
-            old_price_str = f"{saved_price:.0f} €"
-            messages.append(
-                f"{direction}\n<b>{title}</b>\n"
-                f"💾 Bilo: {old_price_str}\n"
-                f"💰 Sada: {current_price_text}\n"
-                f"🔗 {url}"
-            )
-            saved_price = current_num
-
-        # Spremi u bazu (aktivan)
-        conn = sqlite3.connect(DB_FILE)
-        conn.execute(
-            "UPDATE saved_ads SET last_price = ?, last_checked = ?, title = ?, "
-            "saved_price = ?, status = 'active' WHERE id = ?",
-            (current_price_text, now, title, saved_price, ad_id),
-        )
-        conn.commit()
-        conn.close()
+    # Drugi prolaz: CAPTCHA oglasi nakon pauze (cesto uspije kad IP "odahne")
+    if captcha_ads:
+        retry_ids = [a[0] for a in captcha_ads]
+        print(f"  [i] Retry {len(retry_ids)} CAPTCHA oglasa nakon 12s pauze...")
+        time.sleep(12)
+        captcha_ads.clear()
+        skipped_captcha = 0
+        for ad_id in retry_ids:
+            row = by_id.get(ad_id)
+            if not row:
+                continue
+            time.sleep(2.5)
+            apply_result(_check_one_saved_ad(page, row, now), count_visit=False)
 
     if skipped_gone_until_evening:
         print(
