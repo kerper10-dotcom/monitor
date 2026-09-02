@@ -97,10 +97,14 @@ TELEGRAM_MAX_CHARS = 4000
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
 # Gone oglase (prodano/neaktivno): ne otvaraj svaki sat.
-# Jednom dnevno u 23:xx Europe/Zagreb (prvi satni run u tom satu, npr. 23:05)
-# bot prolazi SVE spremljene (uklj. gone) — detekcija povratka "PONOVO AKTIVAN".
+# Jednom dnevno u 23:xx Europe/Zagreb — samo gone (povratak "PONOVO AKTIVAN").
 # Override: SAVED_ADS_MODE=active|all
 GONE_RECHECK_HOUR_ZAGREB = 23
+
+# Aktivni spremljeni: 2 batcheva (paran/neparan ID) naizmjenicno svaki sat.
+# Sat 0,2,4… → batch 0; sat 1,3,5… → batch 1. Svaki oglas ~svaka 2 sata.
+# Manje HTTP zahtjeva = manje ShieldSquare CAPTCHA.
+SAVED_ADS_BATCHES = 2
 
 
 # =============================================================================
@@ -500,28 +504,32 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 
 
 def get_saved_ads_mode() -> str:
-    """active = samo aktivni (satni run); all = svi uklj. gone (vecernji recheck)."""
+    """active = satni run (jedan batch aktivnih); all = vecernji gone recheck.
+
+    Vecernji workflow mora postaviti SAVED_ADS_MODE=all. Satni run ostaje active.
+    """
     env = os.environ.get("SAVED_ADS_MODE", "").strip().lower()
     if env in ("active", "all"):
         return env
-    # Jednom dnevno u 23:xx po Zagrebu (npr. Actions u 23:05 lokalno)
-    if _zagreb_now().hour == GONE_RECHECK_HOUR_ZAGREB:
-        return "all"
     return "active"
+
+
+def _saved_ads_batch_index() -> int:
+    return _zagreb_now().hour % SAVED_ADS_BATCHES
 
 
 def check_saved_ads(page) -> tuple[list[str], int, dict]:
     """Provjerava cijene spremljenih oglasa.
 
-    Vraca (poruke, broj_captcha, stats).
-    Mode active (satni run): samo status=active.
-    Mode all (23:xx Zagreb ili SAVED_ADS_MODE=all): svi oglasi — i gone (povratak).
+    Mode active (satni): samo aktivni, jedan batch (id % 2 == sat % 2).
+    Mode all (23:xx / SAVED_ADS_MODE=all): samo gone — jeli se vratili.
     """
     mode = get_saved_ads_mode()
     z = _zagreb_now()
+    batch = _saved_ads_batch_index()
     print(
-        f"  [i] saved_ads mode={mode} | Zagreb {z.strftime('%d.%m.%Y. %H:%M')} "
-        f"(gone recheck u {GONE_RECHECK_HOUR_ZAGREB}:xx)"
+        f"  [i] saved_ads mode={mode} batch={batch}/{SAVED_ADS_BATCHES} "
+        f"| Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
     )
 
     conn = sqlite3.connect(DB_FILE)
@@ -543,6 +551,8 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "no_price": 0,
         "errors": 0,
         "captcha_ads": [],
+        "batch": 0,
+        "skipped_batch": 0,
     }
     if not saved:
         return [], 0, empty_stats
@@ -551,6 +561,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     skipped_captcha = 0
     captcha_ads: list[tuple] = []
     skipped_gone_until_evening = 0
+    skipped_batch = 0
     checked = 0
     reactivated = 0
     visited = 0
@@ -598,11 +609,33 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
             if res.get("message"):
                 messages.append(res["message"])
 
+    skip_hourly_at_evening = (
+        mode == "active" and z.hour == GONE_RECHECK_HOUR_ZAGREB
+    )
+    if skip_hourly_at_evening:
+        print(
+            f"  [i] {GONE_RECHECK_HOUR_ZAGREB}:xx Zagreb — satni skip spremljenih "
+            "(vecernji job gleda gone)"
+        )
+
     for row in saved:
+        if skip_hourly_at_evening:
+            break
+        ad_id = row[0]
         status = row[5] or "active"
-        if mode == "active" and status == "gone":
-            skipped_gone_until_evening += 1
-            continue
+        if mode == "active":
+            if status == "gone":
+                skipped_gone_until_evening += 1
+                continue
+            # Satni run: samo jedan batch aktivnih (paran/neparan ID)
+            if ad_id % SAVED_ADS_BATCHES != batch:
+                skipped_batch += 1
+                continue
+        else:
+            # Vecernji run: samo gone (povratak). Aktivne vec gleda satni batch.
+            if status != "gone":
+                skipped_batch += 1
+                continue
         apply_result(_check_one_saved_ad(page, row, now))
 
     # Drugi prolaz: CAPTCHA oglasi nakon pauze (cesto uspije kad IP "odahne")
@@ -619,10 +652,12 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
             time.sleep(2.5)
             apply_result(_check_one_saved_ad(page, row, now), count_visit=False)
 
+    if skipped_batch:
+        print(f"  [i] Preskoceno {skipped_batch} oglasa (drugi batch / vecernji skip aktivnih)")
     if skipped_gone_until_evening:
         print(
             f"  [i] Preskoceno {skipped_gone_until_evening} gone oglasa "
-            f"(full recheck u {GONE_RECHECK_HOUR_ZAGREB}:xx Zagreb)"
+            f"(recheck u {GONE_RECHECK_HOUR_ZAGREB}:xx Zagreb)"
         )
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
@@ -642,6 +677,8 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "no_price": no_price,
         "errors": errors,
         "captcha_ads": captcha_ads,
+        "batch": batch,
+        "skipped_batch": skipped_batch,
     }
     return messages, skipped_captcha, stats
 
@@ -962,14 +999,11 @@ def run():
         # Vecernji full pass: uvijek potvrda da je run prosao (cak i bez promjena)
         if saved_stats.get("mode") == "all":
             send_telegram(
-                f"🌙 <b>VEČERNJA PROVJERA</b>\n"
+                f"🌙 <b>VEČERNJA PROVJERA</b> (samo gone / povratak)\n"
                 f"📅 {ts}\n"
                 f"U listi: {saved_stats.get('total', 0)}\n"
-                f"Otvoreno: {saved_stats.get('visited', 0)}\n"
-                f"Aktivnih (cijena OK): {saved_stats.get('checked', 0)}\n"
+                f"Otvoreno gone: {saved_stats.get('visited', 0)}\n"
                 f"Još gone/prodano: {saved_stats.get('still_gone', 0)}\n"
-                f"Bez cijene: {saved_stats.get('no_price', 0)}\n"
-                f"Greška učitavanja: {saved_stats.get('errors', 0)}\n"
                 f"Ponovo aktivno: {saved_stats.get('reactivated', 0)}\n"
                 f"Promjena: {len(saved_messages)}\n"
                 f"CAPTCHA skip: {skipped_saved}"
