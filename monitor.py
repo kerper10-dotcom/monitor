@@ -148,8 +148,85 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS notified_events ("
+        "  key TEXT PRIMARY KEY,"
+        "  sent_at TEXT NOT NULL"
+        ")"
+    )
+
     conn.commit()
     conn.close()
+
+
+MIN_RUN_GAP_MINUTES = 25
+
+
+def _meta_get(key: str) -> str | None:
+    conn = sqlite3.connect(DB_FILE)
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def _meta_set(key: str, value: str) -> None:
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
+    conn.close()
+
+
+def already_notified(key: str, hours: float = 36) -> bool:
+    conn = sqlite3.connect(DB_FILE)
+    row = conn.execute("SELECT sent_at FROM notified_events WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    if not row:
+        return False
+    try:
+        sent = datetime.fromisoformat(row[0])
+        return (datetime.now() - sent).total_seconds() < hours * 3600
+    except ValueError:
+        return False
+
+
+def mark_notified(key: str) -> None:
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute(
+        "INSERT OR REPLACE INTO notified_events (key, sent_at) VALUES (?, ?)",
+        (key, datetime.now().isoformat(timespec="seconds")),
+    )
+    conn.commit()
+    conn.close()
+
+
+def claim_run_slot() -> bool:
+    """Sprecava duple runove (schedule + workflow_dispatch) unutar ~25 min."""
+    mode = os.environ.get("SAVED_ADS_MODE", "active").strip().lower() or "active"
+    last_raw = _meta_get("last_run_at")
+    last_mode = _meta_get("last_run_mode") or ""
+    now = datetime.now()
+    if last_raw:
+        try:
+            last = datetime.fromisoformat(last_raw)
+            gap = (now - last).total_seconds()
+            # Vecernji gone-check smije doci odmah nakon satnog runa
+            if gap < MIN_RUN_GAP_MINUTES * 60:
+                if mode == "all" and last_mode != "all":
+                    pass
+                else:
+                    print(
+                        f"  [i] Preskacem run — prethodni prije {gap / 60:.0f} min "
+                        f"(min. razmak {MIN_RUN_GAP_MINUTES} min, mode={mode})"
+                    )
+                    return False
+        except ValueError:
+            pass
+    _meta_set("last_run_at", now.isoformat(timespec="seconds"))
+    _meta_set("last_run_mode", mode)
+    return True
 
 
 def db_is_empty() -> bool:
@@ -421,10 +498,13 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
     if _is_ad_gone(ad_id, current_url):
         if status != "gone":
             _mark_saved_status(ad_id, "gone", title=title, last_checked=now)
-            return {
-                "kind": "sold",
-                "message": f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}",
-            }
+            msg = f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}"
+            key = f"sold:{ad_id}"
+            if already_notified(key):
+                msg = None
+            else:
+                mark_notified(key)
+            return {"kind": "sold", "message": msg}
         _mark_saved_status(ad_id, "gone", last_checked=now)
         return {"kind": "still_gone"}
 
@@ -440,10 +520,13 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
     if _is_sold_or_removed(body_snippet, page_html):
         if status != "gone":
             _mark_saved_status(ad_id, "gone", title=title or page_title, last_checked=now)
-            return {
-                "kind": "sold",
-                "message": f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}",
-            }
+            msg = f"🚫 <b>PRODANO / UKLONJENO</b>\n{title or page_title}\n🔗 {url}"
+            key = f"sold:{ad_id}"
+            if already_notified(key):
+                msg = None
+            else:
+                mark_notified(key)
+            return {"kind": "sold", "message": msg}
         _mark_saved_status(ad_id, "gone", last_checked=now)
         return {"kind": "still_gone"}
 
@@ -470,26 +553,32 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
             last_checked=now,
             saved_price=saved_price,
         )
-        return {
-            "kind": "reactivated",
-            "message": (
-                f"🔄 <b>PONOVO AKTIVAN</b>\n"
-                f"<b>{title}</b>\n"
-                f"💰 {current_price_text}\n"
-                f"🔗 {url}"
-            ),
-        }
+        msg = (
+            f"🔄 <b>PONOVO AKTIVAN</b>\n"
+            f"<b>{title}</b>\n"
+            f"💰 {current_price_text}\n"
+            f"🔗 {url}"
+        )
+        key = f"reactivated:{ad_id}"
+        if already_notified(key, hours=24):
+            msg = None
+        else:
+            mark_notified(key)
+        return {"kind": "reactivated", "message": msg}
 
     msg = None
     if saved_num is not None and current_num is not None and current_num != saved_num:
         direction = "📈 PORASLA" if current_num > saved_num else "📉 PALA"
         old_price_str = f"{saved_price:.0f} €"
-        msg = (
-            f"{direction}\n<b>{title}</b>\n"
-            f"💾 Bilo: {old_price_str}\n"
-            f"💰 Sada: {current_price_text}\n"
-            f"🔗 {url}"
-        )
+        key = f"price:{ad_id}:{current_num:.0f}"
+        if not already_notified(key, hours=24):
+            mark_notified(key)
+            msg = (
+                f"{direction}\n<b>{title}</b>\n"
+                f"💾 Bilo: {old_price_str}\n"
+                f"💰 Sada: {current_price_text}\n"
+                f"🔗 {url}"
+            )
         saved_price = current_num
 
     conn = sqlite3.connect(DB_FILE)
@@ -845,6 +934,9 @@ def _split_message(text: str, max_len: int) -> list[str]:
 def run():
     init_db()
     sync_saved_ads_from_json()
+    if not claim_run_slot():
+        print("  [i] Dupli run preskocen (nema Telegrama).")
+        return
     first_run = db_is_empty()
 
     print("=" * 60)
@@ -989,25 +1081,35 @@ def run():
                 + telegram_body
             )
         if skipped_saved > 0:
-            cap_lines = [
-                f"⚠️ <b>UPOZORENJE</b>\n📅 {ts}\n"
-                f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok).\n"
-            ]
-            for ad_id, title, url in (saved_stats.get("captcha_ads") or [])[:25]:
-                cap_lines.append(f"{ad_id} — {title or '?'}\n{url}")
-            send_telegram("\n".join(cap_lines))
-        # Vecernji full pass: uvijek potvrda da je run prosao (cak i bez promjena)
+            cap_key = f"captcha:{time.strftime('%Y-%m-%d')}"
+            if not already_notified(cap_key, hours=20):
+                mark_notified(cap_key)
+                cap_lines = [
+                    f"⚠️ <b>UPOZORENJE</b>\n📅 {ts}\n"
+                    f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok).\n"
+                ]
+                for ad_id, title, url in (saved_stats.get("captcha_ads") or [])[:25]:
+                    cap_lines.append(f"{ad_id} — {title or '?'}\n{url}")
+                send_telegram("\n".join(cap_lines))
+            else:
+                print("  [i] CAPTCHA upozorenje vec poslano danas — skip")
+        # Vecernji pass: potvrda jednom dnevno
         if saved_stats.get("mode") == "all":
-            send_telegram(
-                f"🌙 <b>VEČERNJA PROVJERA</b> (samo gone / povratak)\n"
-                f"📅 {ts}\n"
-                f"U listi: {saved_stats.get('total', 0)}\n"
-                f"Otvoreno gone: {saved_stats.get('visited', 0)}\n"
-                f"Još gone/prodano: {saved_stats.get('still_gone', 0)}\n"
-                f"Ponovo aktivno: {saved_stats.get('reactivated', 0)}\n"
-                f"Promjena: {len(saved_messages)}\n"
-                f"CAPTCHA skip: {skipped_saved}"
-            )
+            eve_key = f"evening:{time.strftime('%Y-%m-%d')}"
+            if already_notified(eve_key, hours=20):
+                print("  [i] Vecernja potvrda vec poslana danas — skip")
+            else:
+                mark_notified(eve_key)
+                send_telegram(
+                    f"🌙 <b>VEČERNJA PROVJERA</b> (samo gone / povratak)\n"
+                    f"📅 {ts}\n"
+                    f"U listi: {saved_stats.get('total', 0)}\n"
+                    f"Otvoreno gone: {saved_stats.get('visited', 0)}\n"
+                    f"Još gone/prodano: {saved_stats.get('still_gone', 0)}\n"
+                    f"Ponovo aktivno: {saved_stats.get('reactivated', 0)}\n"
+                    f"Promjena: {len(saved_messages)}\n"
+                    f"CAPTCHA skip: {skipped_saved}"
+                )
     elif first_run and total_new > 0:
         print(f"\n[i] Inicijalno spremljeno {total_new} oglasa u bazu (bez obavijesti)")
 
