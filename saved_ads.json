@@ -1461,7 +1461,7 @@
     "url": "https://www.njuskalo.hr/nekretnine/zadar-plovanija-namjesten-dvoetazan-stan-prizemlje-vrtom-79-m2-oglas-51360912",
     "saved_price": 260000.0,
     "saved_date": "30.08.2026",
-    "status": "active"
+    "status": "gone"
   },
   {
     "id": 51375833,
@@ -1493,6 +1493,6 @@
     "url": "https://www.njuskalo.hr/auti/toyota-yaris-hybrid-hatchback-2026-kao-oglas-51405428",
     "saved_price": 19900.0,
     "saved_date": "01.09.2026",
-    "status": "active"
+    "status": "gone"
   }
 ]
