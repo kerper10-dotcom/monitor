@@ -23,7 +23,7 @@ import re
 import sqlite3
 import time
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -202,9 +202,33 @@ def mark_notified(key: str) -> None:
     conn.close()
 
 
+def should_daily_full_saved_check() -> bool:
+    """Jednom dnevno (navečer po Zagrebu) provjeri SVE spremljene — povratak oglasa.
+
+    GitHub schedule često kasni pa 21:05 UTC postane 01:xx — zato catch-up do 08:00.
+    """
+    if os.environ.get("SAVED_ADS_MODE", "").strip().lower() == "all":
+        return True
+    z = _zagreb_now()
+    today = z.strftime("%Y-%m-%d")
+    last = _meta_get("daily_full_saved_date")
+    if last == today:
+        return False
+    h = z.hour
+    if h >= 21:
+        return True
+    # Catch-up 00–08 samo ako smo propustili jučerašnji evening
+    if h < 8:
+        yesterday = (z - timedelta(days=1)).strftime("%Y-%m-%d")
+        return last is None or last < yesterday
+    return False
+
+
 def claim_run_slot() -> bool:
     """Sprecava duple runove (schedule + workflow_dispatch) unutar ~25 min."""
-    mode = os.environ.get("SAVED_ADS_MODE", "active").strip().lower() or "active"
+    env_mode = os.environ.get("SAVED_ADS_MODE", "active").strip().lower() or "active"
+    doing_full = should_daily_full_saved_check()
+    mode = "all" if doing_full else env_mode
     last_raw = _meta_get("last_run_at")
     last_mode = _meta_get("last_run_mode") or ""
     now = datetime.now()
@@ -212,9 +236,8 @@ def claim_run_slot() -> bool:
         try:
             last = datetime.fromisoformat(last_raw)
             gap = (now - last).total_seconds()
-            # Vecernji gone-check smije doci odmah nakon satnog runa
             if gap < MIN_RUN_GAP_MINUTES * 60:
-                if mode == "all" and last_mode != "all":
+                if doing_full and last_mode != "all":
                     pass
                 else:
                     print(
@@ -593,13 +616,12 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 
 
 def get_saved_ads_mode() -> str:
-    """active = satni run (jedan batch aktivnih); all = vecernji gone recheck.
-
-    Vecernji workflow mora postaviti SAVED_ADS_MODE=all. Satni run ostaje active.
-    """
+    """active = satni batch aktivnih; all = dnevni full pass svih spremljenih."""
     env = os.environ.get("SAVED_ADS_MODE", "").strip().lower()
-    if env in ("active", "all"):
-        return env
+    if env == "all" or should_daily_full_saved_check():
+        return "all"
+    if env == "active":
+        return "active"
     return "active"
 
 
@@ -611,7 +633,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     """Provjerava cijene spremljenih oglasa.
 
     Mode active (satni): samo aktivni, jedan batch (id % 2 == sat % 2).
-    Mode all (23:xx / SAVED_ADS_MODE=all): samo gone — jeli se vratili.
+    Mode all (jednom dnevno navečer): SVI spremljeni — cijena + povratak gone.
     """
     mode = get_saved_ads_mode()
     z = _zagreb_now()
@@ -698,34 +720,21 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
             if res.get("message"):
                 messages.append(res["message"])
 
-    skip_hourly_at_evening = (
-        mode == "active" and z.hour == GONE_RECHECK_HOUR_ZAGREB
-    )
-    if skip_hourly_at_evening:
-        print(
-            f"  [i] {GONE_RECHECK_HOUR_ZAGREB}:xx Zagreb — satni skip spremljenih "
-            "(vecernji job gleda gone)"
-        )
-
     for row in saved:
-        if skip_hourly_at_evening:
-            break
         ad_id = row[0]
         status = row[5] or "active"
         if mode == "active":
             if status == "gone":
                 skipped_gone_until_evening += 1
                 continue
-            # Satni run: samo jedan batch aktivnih (paran/neparan ID)
             if ad_id % SAVED_ADS_BATCHES != batch:
                 skipped_batch += 1
                 continue
-        else:
-            # Vecernji run: samo gone (povratak). Aktivne vec gleda satni batch.
-            if status != "gone":
-                skipped_batch += 1
-                continue
         apply_result(_check_one_saved_ad(page, row, now))
+
+    if mode == "all":
+        _meta_set("daily_full_saved_date", z.strftime("%Y-%m-%d"))
+        print("  [i] Dnevni full pass spremljenih oznacen kao odrađen")
 
     # Drugi prolaz: CAPTCHA oglasi nakon pauze (cesto uspije kad IP "odahne")
     if captcha_ads:
@@ -1101,7 +1110,7 @@ def run():
             else:
                 mark_notified(eve_key)
                 send_telegram(
-                    f"🌙 <b>VEČERNJA PROVJERA</b> (samo gone / povratak)\n"
+                    f"🌙 <b>VEČERNJA PROVJERA</b> (svi spremljeni)\n"
                     f"📅 {ts}\n"
                     f"U listi: {saved_stats.get('total', 0)}\n"
                     f"Otvoreno gone: {saved_stats.get('visited', 0)}\n"
