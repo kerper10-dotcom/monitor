@@ -23,7 +23,7 @@ import re
 import sqlite3
 import time
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -96,15 +96,9 @@ TELEGRAM_MAX_CHARS = 4000
 # Postavi na None ako zelis SVE oglase bez obzira na datum
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
-# Gone oglase (prodano/neaktivno): ne otvaraj svaki sat danju.
-GONE_RECHECK_HOUR_ZAGREB = 23
-
-# Aktivni spremljeni danju: 2 batcheva (paran/neparan ID) naizmjenicno svaki sat.
-SAVED_ADS_BATCHES = 2
-
-# Vecer 21/22/23/00 Zagreb: 4 slice-a svih spremljenih (~40–50 po runu), uklj. gone.
-EVENING_SLICES = 4
-EVENING_HOUR_TO_SLOT = {21: 0, 22: 1, 23: 2, 0: 3}
+# Svaki sat: ~1/4 svih spremljenih (id % 4 == sat % 4), uklj. gone.
+# ~40–50 URL-ova po runu — ShieldSquare pada na 180+ u nizu.
+SAVED_ADS_SLICES = 4
 
 
 # =============================================================================
@@ -149,32 +143,12 @@ def init_db():
         pass
 
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)"
-    )
-    conn.execute(
         "CREATE TABLE IF NOT EXISTS notified_events ("
         "  key TEXT PRIMARY KEY,"
         "  sent_at TEXT NOT NULL"
         ")"
     )
 
-    conn.commit()
-    conn.close()
-
-
-MIN_RUN_GAP_MINUTES = 25
-
-
-def _meta_get(key: str) -> str | None:
-    conn = sqlite3.connect(DB_FILE)
-    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
-    conn.close()
-    return row[0] if row else None
-
-
-def _meta_set(key: str, value: str) -> None:
-    conn = sqlite3.connect(DB_FILE)
-    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
     conn.close()
 
@@ -200,66 +174,6 @@ def mark_notified(key: str) -> None:
     )
     conn.commit()
     conn.close()
-
-
-def _evening_cycle_date(z: datetime) -> str | None:
-    """Vecernji ciklus: 21:00–23:59 = taj datum; 00:00–07:59 = jucer (dovrsavanje)."""
-    if z.hour >= 21:
-        return z.strftime("%Y-%m-%d")
-    if z.hour < 8:
-        return (z - timedelta(days=1)).strftime("%Y-%m-%d")
-    return None
-
-
-def _max_evening_slot_allowed(z: datetime) -> int:
-    if z.hour >= 21:
-        return EVENING_HOUR_TO_SLOT[z.hour]
-    # 00–07: sva 4 slice-a smiju catch-up (jedan po runu)
-    return EVENING_SLICES - 1
-
-
-def next_evening_slice() -> tuple[str, int] | None:
-    """Vrati (cycle_date, slot 0–3) ili None ako nije vecer / sve odradeno."""
-    z = _zagreb_now()
-    cycle = _evening_cycle_date(z)
-    if not cycle:
-        return None
-    max_slot = _max_evening_slot_allowed(z)
-    for slot in range(max_slot + 1):
-        if _meta_get(f"evening_slice:{cycle}:{slot}") != "1":
-            return cycle, slot
-    return None
-
-
-def mark_evening_slice_done(cycle: str, slot: int) -> None:
-    _meta_set(f"evening_slice:{cycle}:{slot}", "1")
-
-
-def claim_run_slot() -> bool:
-    """Sprecava duple runove unutar ~25 min. Evening slice smije ici odmah nakon satnog."""
-    pending = next_evening_slice()
-    mode = f"evening:{pending[1]}" if pending else "active"
-    last_raw = _meta_get("last_run_at")
-    last_mode = _meta_get("last_run_mode") or ""
-    now = datetime.now()
-    if last_raw:
-        try:
-            last = datetime.fromisoformat(last_raw)
-            gap = (now - last).total_seconds()
-            if gap < MIN_RUN_GAP_MINUTES * 60:
-                if pending and last_mode != mode:
-                    pass
-                else:
-                    print(
-                        f"  [i] Preskacem run — prethodni prije {gap / 60:.0f} min "
-                        f"(min. razmak {MIN_RUN_GAP_MINUTES} min, mode={mode})"
-                    )
-                    return False
-        except ValueError:
-            pass
-    _meta_set("last_run_at", now.isoformat(timespec="seconds"))
-    _meta_set("last_run_mode", mode)
-    return True
 
 
 def db_is_empty() -> bool:
@@ -625,58 +539,32 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
     return {"kind": "ok" if not msg else "price", "message": msg}
 
 
-def get_saved_ads_mode() -> str:
-    """active = satni batch aktivnih; evening = jedan od 4 vecernja slice-a."""
-    if next_evening_slice():
-        return "evening"
-    return "active"
-
-
-def _saved_ads_batch_index() -> int:
-    return _zagreb_now().hour % SAVED_ADS_BATCHES
-
-
 def check_saved_ads(page) -> tuple[list[str], int, dict]:
-    """Provjerava cijene spremljenih oglasa.
-
-    Mode active (dan): samo aktivni, jedan batch (id % 2 == sat % 2).
-    Mode evening (21/22/23/00): jedan slice svih oglasa (id % 4 == slot), uklj. gone.
-    """
-    pending = next_evening_slice()
-    mode = "evening" if pending else "active"
+    """Svaki sat: 1/4 svih spremljenih (id % 4 == sat % 4), uklj. gone."""
     z = _zagreb_now()
-    batch = _saved_ads_batch_index()
-    evening_slot = pending[1] if pending else None
-    evening_cycle = pending[0] if pending else None
+    slot = z.hour % SAVED_ADS_SLICES
     print(
-        f"  [i] saved_ads mode={mode} "
-        f"{'slice=' + str(evening_slot + 1) + '/' + str(EVENING_SLICES) if pending else 'batch=' + str(batch) + '/' + str(SAVED_ADS_BATCHES)} "
+        f"  [i] saved_ads slice {slot + 1}/{SAVED_ADS_SLICES} "
         f"| Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
     )
 
     conn = sqlite3.connect(DB_FILE)
-    cur = conn.execute(
+    saved = conn.execute(
         "SELECT id, title, url, saved_price, last_price, "
         "COALESCE(status, 'active'), last_checked FROM saved_ads"
-    )
-    saved = cur.fetchall()
+    ).fetchall()
     conn.close()
 
     empty_stats = {
-        "mode": mode,
         "checked": 0,
         "total": 0,
-        "skipped_gone": 0,
         "reactivated": 0,
         "visited": 0,
         "still_gone": 0,
         "no_price": 0,
         "errors": 0,
         "captcha_ads": [],
-        "batch": 0,
-        "skipped_batch": 0,
-        "evening_slot": evening_slot,
-        "evening_cycle": evening_cycle,
+        "slot": slot,
         "slice_total": 0,
     }
     if not saved:
@@ -685,8 +573,6 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     messages = []
     skipped_captcha = 0
     captcha_ads: list[tuple] = []
-    skipped_gone_until_evening = 0
-    skipped_batch = 0
     checked = 0
     reactivated = 0
     visited = 0
@@ -694,31 +580,23 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     no_price = 0
     errors = 0
     now = time.strftime("%d.%m.%Y. %H:%M")
-
-    # Najstariji last_checked prvo — CAPTCHA zrtve iz proslog runa idu na pocetak,
-    # ne uvijek isti zadnji ID-ovi nakon sto Njuskalo pocne blokirati.
     saved = sorted(saved, key=lambda r: (_parse_last_checked(r[6]), r[0]))
-    by_id = {r[0]: r for r in saved}
 
-    def apply_result(res: dict, count_visit: bool = True):
+    def apply_result(res: dict):
         nonlocal skipped_captcha, errors, visited, still_gone, no_price
         nonlocal checked, reactivated
         kind = res.get("kind")
         if kind == "captcha":
             skipped_captcha += 1
-            if count_visit:
-                visited += 1
+            visited += 1
             if res.get("ad"):
                 captcha_ads.append(res["ad"])
             return
         if kind == "error":
             errors += 1
             return
-        if count_visit:
-            visited += 1
-        if kind == "still_gone":
-            still_gone += 1
-        elif kind == "sold":
+        visited += 1
+        if kind in ("still_gone", "sold"):
             still_gone += 1
             if res.get("message"):
                 messages.append(res["message"])
@@ -736,69 +614,27 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
 
     slice_total = 0
     for row in saved:
-        ad_id = row[0]
-        status = row[5] or "active"
-        if mode == "evening":
-            if ad_id % EVENING_SLICES != evening_slot:
-                skipped_batch += 1
-                continue
-            slice_total += 1
-        else:
-            if status == "gone":
-                skipped_gone_until_evening += 1
-                continue
-            if ad_id % SAVED_ADS_BATCHES != batch:
-                skipped_batch += 1
-                continue
+        if row[0] % SAVED_ADS_SLICES != slot:
+            continue
+        slice_total += 1
         apply_result(_check_one_saved_ad(page, row, now))
 
-    if mode == "evening" and evening_cycle is not None and evening_slot is not None:
-        mark_evening_slice_done(evening_cycle, evening_slot)
-        print(f"  [i] Vecernji slice {evening_slot + 1}/{EVENING_SLICES} oznacen ({evening_cycle})")
-
-    # Retry samo ako nije vecernji slice i CAPTCHA nije masovna
-    if captcha_ads and mode != "evening" and len(captcha_ads) <= 8:
-        retry_ids = [a[0] for a in captcha_ads]
-        print(f"  [i] Retry {len(retry_ids)} CAPTCHA oglasa nakon 12s pauze...")
-        time.sleep(12)
-        captcha_ads.clear()
-        skipped_captcha = 0
-        for ad_id in retry_ids:
-            row = by_id.get(ad_id)
-            if not row:
-                continue
-            time.sleep(2.5)
-            apply_result(_check_one_saved_ad(page, row, now), count_visit=False)
-
-    if skipped_batch:
-        print(f"  [i] Preskoceno {skipped_batch} oglasa (drugi batch / vecernji skip aktivnih)")
-    if skipped_gone_until_evening:
-        print(
-            f"  [i] Preskoceno {skipped_gone_until_evening} gone oglasa "
-            f"(recheck u {GONE_RECHECK_HOUR_ZAGREB}:xx Zagreb)"
-        )
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
-    if checked:
-        print(f"  [i] Provjereno {checked} spremljenih oglasa (mode={mode})")
+    print(f"  [i] Slice {slot + 1}/{SAVED_ADS_SLICES}: {slice_total} oglasa, {checked} OK")
     if messages:
         print(f"  [!] {len(messages)} promjena detektirano")
 
     stats = {
-        "mode": mode,
         "checked": checked,
         "total": len(saved),
-        "skipped_gone": skipped_gone_until_evening,
         "reactivated": reactivated,
         "visited": visited,
         "still_gone": still_gone,
         "no_price": no_price,
         "errors": errors,
         "captcha_ads": captcha_ads,
-        "batch": batch,
-        "skipped_batch": skipped_batch,
-        "evening_slot": evening_slot,
-        "evening_cycle": evening_cycle,
+        "slot": slot,
         "slice_total": slice_total,
     }
     return messages, skipped_captcha, stats
@@ -966,9 +802,6 @@ def _split_message(text: str, max_len: int) -> list[str]:
 def run():
     init_db()
     sync_saved_ads_from_json()
-    if not claim_run_slot():
-        print("  [i] Dupli run preskocen (nema Telegrama).")
-        return
     first_run = db_is_empty()
 
     print("=" * 60)
@@ -983,15 +816,16 @@ def run():
     saved_messages: list[str] = []
     skipped_saved = 0
     saved_stats: dict = {
-        "mode": "active",
         "checked": 0,
         "total": 0,
-        "skipped_gone": 0,
         "reactivated": 0,
         "visited": 0,
         "still_gone": 0,
         "no_price": 0,
         "errors": 0,
+        "captcha_ads": [],
+        "slot": 0,
+        "slice_total": 0,
     }
 
     with sync_playwright() as p:
@@ -1113,7 +947,7 @@ def run():
                 + telegram_body
             )
         if skipped_saved > 0:
-            slot = saved_stats.get("evening_slot")
+            slot = saved_stats.get("slot")
             cap_key = f"captcha:{time.strftime('%Y-%m-%d')}:s{slot}"
             if not already_notified(cap_key, hours=20):
                 mark_notified(cap_key)
@@ -1126,20 +960,6 @@ def run():
                 send_telegram("\n".join(cap_lines))
             else:
                 print("  [i] CAPTCHA upozorenje vec poslano za ovaj slice — skip")
-        if saved_stats.get("mode") == "evening":
-            slot = saved_stats.get("evening_slot")
-            slot_n = (slot + 1) if slot is not None else "?"
-            send_telegram(
-                f"🌙 <b>VEČERNJA PROVJERA {slot_n}/{EVENING_SLICES}</b>\n"
-                f"📅 {ts}\n"
-                f"Oglasa u ovom bloku: {saved_stats.get('slice_total', 0)}\n"
-                f"Otvoreno: {saved_stats.get('visited', 0)}\n"
-                f"Aktivnih (cijena OK): {saved_stats.get('checked', 0)}\n"
-                f"Još gone/prodano: {saved_stats.get('still_gone', 0)}\n"
-                f"Ponovo aktivno: {saved_stats.get('reactivated', 0)}\n"
-                f"Promjena: {len(saved_messages)}\n"
-                f"CAPTCHA skip: {skipped_saved}"
-            )
     elif first_run and total_new > 0:
         print(f"\n[i] Inicijalno spremljeno {total_new} oglasa u bazu (bez obavijesti)")
 
