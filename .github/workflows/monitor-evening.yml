@@ -5,9 +5,8 @@ name: Njuskalo Evening Full Check
 # kad je u Zagrebu sat 23 (jednom dnevno).
 # Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 on:
-  schedule:
-    - cron: "5 21 * * *"
-    - cron: "5 22 * * *"
+  # Iskljuceno — vecernji 4-slice ide kroz satni monitor.yml (21/22/23/00 Zagreb).
+  # Ostaje samo rucni Run workflow.
   workflow_dispatch:
 
 concurrency:
