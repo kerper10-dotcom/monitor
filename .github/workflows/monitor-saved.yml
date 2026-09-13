@@ -1,9 +1,10 @@
-name: Njuskalo Monitor
+name: Njuskalo Saved Ads
 
-# Public repo = unlimited free Actions minutes. Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+# Odvojeno od novih oglasa — drugi runner/IP, ~30 detaljnih URL-ova po satu.
+# Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 on:
   schedule:
-    - cron: "5 * * * *"
+    - cron: "35 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -14,7 +15,7 @@ permissions:
   contents: write
 
 jobs:
-  monitor:
+  saved:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -32,10 +33,10 @@ jobs:
           pip install -r requirements.txt
           playwright install chromium --with-deps
 
-      - name: Run monitor (new listings only)
+      - name: Run saved-ads check
         env:
           TZ: Europe/Zagreb
-          MONITOR_MODE: categories
+          MONITOR_MODE: saved
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python monitor.py

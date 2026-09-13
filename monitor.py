@@ -78,6 +78,10 @@ PAGES_PER_URL = 2
 
 # Pauza izmedu URL-ova (sekunde)
 DELAY_BETWEEN_URLS = 2.0
+DELAY_BETWEEN_SAVED_ADS = 3.0
+
+# categories | saved | all (lokalno)
+MONITOR_MODE = os.environ.get("MONITOR_MODE", "all").strip().lower()
 
 # Playwright
 HEADLESS = True
@@ -96,9 +100,8 @@ TELEGRAM_MAX_CHARS = 4000
 # Postavi na None ako zelis SVE oglase bez obzira na datum
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
-# Svaki sat: ~1/4 svih spremljenih (id % 4 == sat % 4), uklj. gone.
-# ~40–50 URL-ova po runu — ShieldSquare pada na 180+ u nizu.
-SAVED_ADS_SLICES = 4
+# Spremljeni: 1/6 po runu (~30 URL-ova). Job je odvojen od kategorija (drugi VM/IP).
+SAVED_ADS_SLICES = 6
 
 
 # =============================================================================
@@ -540,7 +543,7 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 
 
 def check_saved_ads(page) -> tuple[list[str], int, dict]:
-    """Svaki sat: 1/4 svih spremljenih (id % 4 == sat % 4), uklj. gone."""
+    """1/6 svih spremljenih (id % 6 == sat % 6), uklj. gone."""
     z = _zagreb_now()
     slot = z.hour % SAVED_ADS_SLICES
     print(
@@ -616,6 +619,8 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     for row in saved:
         if row[0] % SAVED_ADS_SLICES != slot:
             continue
+        if slice_total:
+            time.sleep(DELAY_BETWEEN_SAVED_ADS)
         slice_total += 1
         apply_result(_check_one_saved_ad(page, row, now))
 
@@ -806,7 +811,7 @@ def run():
 
     print("=" * 60)
     print("  NJuskalo Monitor v2.0")
-    print(f"  {time.strftime('%d.%m.%Y. %H:%M:%S')}")
+    print(f"  {time.strftime('%d.%m.%Y. %H:%M:%S')}  mode={MONITOR_MODE}")
     if first_run:
         print("  [i] PRVO POKRETANJE - punim bazu bez slanja obavijesti")
     print("=" * 60)
@@ -869,15 +874,16 @@ def run():
         except Exception:
             pass
 
-        # Spremljeni oglasi PRVO — prioritet nad kategorijama
-        print("\n[S] Provjera spremljenih oglasa...")
-        saved_messages, skipped_saved, saved_stats = check_saved_ads(page)
-        if saved_messages:
-            print(f"  [!] {len(saved_messages)} promjena na spremljenim oglasima")
+        if MONITOR_MODE in ("all", "saved"):
+            print("\n[S] Provjera spremljenih oglasa...")
+            saved_messages, skipped_saved, saved_stats = check_saved_ads(page)
+            if saved_messages:
+                print(f"  [!] {len(saved_messages)} promjena na spremljenim oglasima")
 
-        # Obradi svaki URL
         categories = list(URLS.keys())
-        for idx, (category, url) in enumerate(URLS.items()):
+        if MONITOR_MODE not in ("all", "categories"):
+            categories = []
+        for idx, (category, url) in enumerate(URLS.items() if categories else []):
             print(f"\n[{category}]")
             print(f"  URL: {url}")
 
