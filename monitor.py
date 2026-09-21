@@ -55,12 +55,6 @@ URLS = {
         "?price%5Bmax%5D=100000&landTypeId=235"
         "&geo%5BlocationIds%5D=8692%2C8696%2C8809%2C8797"
     ),
-    "STANOVI ZAGREB": (
-        "https://www.njuskalo.hr/prodaja-stanova/zagreb"
-        "?price%5Bmin%5D=9001&price%5Bmax%5D=165000"
-        "&buildingFloorPosition%5Bmin%5D=ground-floor"
-        "&buildingFloorPosition%5Bmax%5D=25"
-    ),
     "STANOVI ZG ZUPANIJA": (
         "https://www.njuskalo.hr/prodaja-stanova/zagrebacka"
         "?price%5Bmin%5D=9001&price%5Bmax%5D=165000"
@@ -100,7 +94,7 @@ TELEGRAM_MAX_CHARS = 4000
 # Postavi na None ako zelis SVE oglase bez obzira na datum
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
-# Spremljeni: 1/6 po runu (~30 URL-ova). Job je odvojen od kategorija (drugi VM/IP).
+# 6 sliceova, 3 runa na sat → cijeli krug ~2 sata, ~30 URL-ova po runu.
 SAVED_ADS_SLICES = 6
 
 
@@ -545,7 +539,8 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 def check_saved_ads(page) -> tuple[list[str], int, dict]:
     """1/6 svih spremljenih (id % 6 == sat % 6), uklj. gone."""
     z = _zagreb_now()
-    slot = z.hour % SAVED_ADS_SLICES
+    # :10 → 0, :30 → 1, :50 → 2 unutar sata; 6 sliceova = pun krug za 2 sata
+    slot = (z.hour * 3 + z.minute // 20) % SAVED_ADS_SLICES
     print(
         f"  [i] saved_ads slice {slot + 1}/{SAVED_ADS_SLICES} "
         f"| Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
