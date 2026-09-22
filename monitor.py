@@ -19,6 +19,7 @@ Tokeni se nikad ne stavljaju u kod.
 
 import json
 import os
+import random
 import re
 import sqlite3
 import time
@@ -71,8 +72,12 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 PAGES_PER_URL = 2
 
 # Pauza izmedu URL-ova (sekunde)
-DELAY_BETWEEN_URLS = 2.0
-DELAY_BETWEEN_SAVED_ADS = 3.0
+DELAY_BETWEEN_URLS = (2.5, 5.5)
+DELAY_BETWEEN_SAVED_ADS = (4.0, 8.0)
+
+
+def _pause(bounds: tuple[float, float]) -> None:
+    time.sleep(random.uniform(*bounds))
 
 # categories | saved | all (lokalno)
 MONITOR_MODE = os.environ.get("MONITOR_MODE", "all").strip().lower()
@@ -620,7 +625,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         if i % slices != slot:
             continue
         if slice_total:
-            time.sleep(DELAY_BETWEEN_SAVED_ADS)
+            _pause(DELAY_BETWEEN_SAVED_ADS)
         slice_total += 1
         apply_result(_check_one_saved_ad(page, row, now))
 
@@ -847,14 +852,9 @@ def run():
             ],
         )
 
-        context = browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/125.0.0.0 Safari/537.36"
-            ),
-            locale="hr-HR",
-        )
+        # Bez rucnog UA: Playwright salje UA koji odgovara instaliranom Chromiumu.
+        # Tvrdi Chrome/125 na novijem binaryju je sam po sebi bot-signal.
+        context = browser.new_context(locale="hr-HR")
 
         page = context.new_page()
         page.add_init_script(
@@ -930,7 +930,7 @@ def run():
                 print(f"  [~] Nema novih")
 
             if idx < len(categories) - 1:
-                time.sleep(DELAY_BETWEEN_URLS)
+                _pause(DELAY_BETWEEN_URLS)
 
         browser.close()
 

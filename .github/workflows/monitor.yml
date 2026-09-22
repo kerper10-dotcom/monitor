@@ -47,6 +47,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git pull --rebase --autostash origin main
           git add njuskalo.db saved_ads.json
           if ! git diff --staged --quiet; then
             git commit -m "Update njuskalo.db and saved_ads.json [skip ci]"
