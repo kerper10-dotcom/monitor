@@ -1,14 +1,14 @@
 name: Njuskalo Saved Ads
 
-# Odvojeno od novih oglasa. 3× na sat, ~30 URL-ova → pun krug ~2 sata.
+# Odvojeno od novih oglasa. Svakih 5 min ~20 URL-ova → svi oglasi jednom na sat.
 # Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 on:
   schedule:
-    - cron: "10,30,50 * * * *"
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
   workflow_dispatch:
 
 concurrency:
-  group: njuskalo-monitor
+  group: njuskalo-saved
   cancel-in-progress: false
 
 permissions:

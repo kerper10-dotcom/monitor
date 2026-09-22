@@ -94,8 +94,9 @@ TELEGRAM_MAX_CHARS = 4000
 # Postavi na None ako zelis SVE oglase bez obzira na datum
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
-# 6 sliceova, 3 runa na sat → cijeli krug ~2 sata, ~30 URL-ova po runu.
-SAVED_ADS_SLICES = 6
+# ~20 detalja po runu. 12 runova na sat = svaki oglas jednom na sat.
+# 40–50 u jednom runu na GitHub IP-u i dalje pali ShieldSquare.
+SAVED_ADS_PER_RUN = 20
 
 
 # =============================================================================
@@ -537,14 +538,10 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 
 
 def check_saved_ads(page) -> tuple[list[str], int, dict]:
-    """1/6 svih spremljenih (id % 6 == sat % 6), uklj. gone."""
+    """~20 spremljenih po runu. 12 runova na sat pokrije sve oglase."""
     z = _zagreb_now()
-    # :10 → 0, :30 → 1, :50 → 2 unutar sata; 6 sliceova = pun krug za 2 sata
-    slot = (z.hour * 3 + z.minute // 20) % SAVED_ADS_SLICES
-    print(
-        f"  [i] saved_ads slice {slot + 1}/{SAVED_ADS_SLICES} "
-        f"| Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
-    )
+    # :02,:07,:12… → 12 tickova na sat
+    tick = z.hour * 12 + z.minute // 5
 
     conn = sqlite3.connect(DB_FILE)
     saved = conn.execute(
@@ -562,11 +559,18 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "no_price": 0,
         "errors": 0,
         "captcha_ads": [],
-        "slot": slot,
+        "slot": 0,
+        "slices": 1,
         "slice_total": 0,
     }
     if not saved:
         return [], 0, empty_stats
+    slices = max(1, (len(saved) + SAVED_ADS_PER_RUN - 1) // SAVED_ADS_PER_RUN)
+    slot = tick % slices
+    print(
+        f"  [i] saved_ads {slot + 1}/{slices} (~{SAVED_ADS_PER_RUN}/run) "
+        f"| Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
+    )
 
     messages = []
     skipped_captcha = 0
@@ -610,9 +614,10 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
             if res.get("message"):
                 messages.append(res["message"])
 
+    ordered = sorted(saved, key=lambda r: r[0])
     slice_total = 0
-    for row in saved:
-        if row[0] % SAVED_ADS_SLICES != slot:
+    for i, row in enumerate(ordered):
+        if i % slices != slot:
             continue
         if slice_total:
             time.sleep(DELAY_BETWEEN_SAVED_ADS)
@@ -621,7 +626,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
 
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
-    print(f"  [i] Slice {slot + 1}/{SAVED_ADS_SLICES}: {slice_total} oglasa, {checked} OK")
+    print(f"  [i] Komad {slot + 1}/{slices}: {slice_total} oglasa, {checked} OK")
     if messages:
         print(f"  [!] {len(messages)} promjena detektirano")
 
@@ -635,6 +640,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "errors": errors,
         "captcha_ads": captcha_ads,
         "slot": slot,
+        "slices": slices,
         "slice_total": slice_total,
     }
     return messages, skipped_captcha, stats
