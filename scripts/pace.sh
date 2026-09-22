@@ -1,36 +1,16 @@
 #!/usr/bin/env bash
-# Drži ritam provjere. Ne otvara Njuskalo. Samo šalje workflow_dispatch.
-# Svaka runda saved joba je svjezi ubuntu-latest runner, ~20 detaljnih URL-ova.
+# Drži ritam samo dok runda prođe bez CAPTCHA-e.
+# Ne otvara Njuskalo. Ako je runner blokiran, stane nakon te jedne runde.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-queued_or_active() {
-  local wf="$1"
-  gh run list --workflow "$wf" --limit 40 --json status \
-    --jq '[.[] | select(.status=="queued" or .status=="in_progress" or .status=="waiting" or .status=="pending" or .status=="requested")] | length'
-}
-
 queued_only() {
-  local wf="$1"
-  gh run list --workflow "$wf" --limit 40 --json status \
+  gh run list --workflow monitor-pace.yml --limit 40 --json status \
     --jq '[.[] | select(.status=="queued" or .status=="waiting" or .status=="pending" or .status=="requested")] | length'
 }
 
-dispatch_if_idle() {
-  local wf="$1"
-  local n
-  n="$(queued_or_active "$wf")"
-  if [ "$n" -gt 0 ]; then
-    echo "skip ${wf} (${n} već aktivan)"
-    return 0
-  fi
-  gh workflow run "$wf" --ref main
-  echo "dispatched ${wf}"
-}
-
-# Ako watchdog stoji u redu iza nas, neka on preuzme. Inače dva pacera udvostruče scrape.
-if [ "$(queued_only monitor-pace.yml)" -gt 0 ]; then
-  echo "pace: drugi run već čeka, izlazim"
+if [ "$(queued_only)" -gt 0 ]; then
+  echo "pace: drugi run vec ceka, izlazim"
   exit 0
 fi
 
@@ -44,29 +24,31 @@ ticks=$(( (count + per - 1) / per ))
 if [ "$ticks" -lt 1 ]; then
   ticks=1
 fi
-interval=$(( 3600 / ticks ))
-if [ "$interval" -lt 180 ]; then
-  interval=180
-fi
-fit=$(( 3600 / interval ))
-if [ "$ticks" -gt "$fit" ]; then
-  ticks=$fit
-fi
-
-echo "pace: ${count} oglasa, ${ticks} rundi, razmak ${interval}s"
+echo "pace: ${count} oglasa, najvise ${ticks} rundi, stajem na prvoj CAPTCHA-i"
 
 for i in $(seq 1 "$ticks"); do
-  dispatch_if_idle monitor-saved.yml
-  if [ "$i" -eq 1 ]; then
-    dispatch_if_idle monitor.yml
+  set +e
+  line="$(python3 scripts/pace_once.py monitor-saved.yml)"
+  rc=$?
+  set -e
+  echo "pace tick ${i}/${ticks} rc=${rc} ${line}"
+  if [ "$rc" -eq 10 ]; then
+    echo "pace: CAPTCHA, ne nastavljam. Iduci pokusaj je iduci watchdog."
+    exit 0
   fi
-  echo "sleep ${interval}s (${i}/${ticks})"
-  sleep "$interval"
+  if [ "$rc" -ne 0 ]; then
+    echo "pace: runda nije uspjela"
+    exit "$rc"
+  fi
+  if [ "$i" -lt "$ticks" ]; then
+    echo "sleep 120"
+    sleep 120
+  fi
 done
 
-if [ "$(queued_only monitor-pace.yml)" -eq 0 ]; then
+if [ "$(queued_only)" -eq 0 ]; then
   gh workflow run monitor-pace.yml --ref main
   echo "dispatched next pace"
 else
-  echo "sljedeći pace već čeka"
+  echo "sljedeci pace vec ceka"
 fi

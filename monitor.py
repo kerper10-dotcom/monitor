@@ -457,6 +457,34 @@ def _fetch_price_text(page) -> str:
     return ""
 
 
+def _captcha_result(page, ad_id, title, url) -> dict:
+    try:
+        shown = (page.title() or "")[:100]
+    except Exception:
+        shown = ""
+    try:
+        final = (page.url or "")[:160]
+    except Exception:
+        final = ""
+    print(f"    [!] CAPTCHA {ad_id} | {shown} | {final}")
+    return {"kind": "captcha", "ad": (ad_id, title, url)}
+
+
+def _proxy_settings() -> dict | None:
+    """Samo ako je PROXY_SERVER postavljen. Inače izravno, kao i dosad."""
+    server = os.environ.get("PROXY_SERVER", "").strip()
+    if not server:
+        return None
+    proxy = {"server": server}
+    user = os.environ.get("PROXY_USERNAME", "").strip()
+    password = os.environ.get("PROXY_PASSWORD", "").strip()
+    if user:
+        proxy["username"] = user
+    if password:
+        proxy["password"] = password
+    return proxy
+
+
 def _check_one_saved_ad(page, row, now: str) -> dict:
     """Provjeri jedan spremljeni oglas. Vraca kind + optional message."""
     ad_id, title, url, saved_price, last_price, status, last_checked = row
@@ -469,18 +497,18 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 
     page_title = page.title()
     if "shieldsquare" in page_title.lower() or "captcha" in page_title.lower():
-        return {"kind": "captcha", "ad": (ad_id, title, url)}
+        return _captcha_result(page, ad_id, title, url)
 
     try:
         body_probe = page.locator("body").inner_text()[:500].lower()
     except Exception:
         body_probe = ""
     if "shieldsquare" in body_probe or "tamnu stranu" in body_probe:
-        return {"kind": "captcha", "ad": (ad_id, title, url)}
+        return _captcha_result(page, ad_id, title, url)
 
     current_url = page.url
     if current_url != url and "njuskalo.hr" not in current_url:
-        return {"kind": "captcha", "ad": (ad_id, title, url)}
+        return _captcha_result(page, ad_id, title, url)
 
     if _is_ad_gone(ad_id, current_url):
         if status != "gone":
@@ -734,7 +762,11 @@ def scrape_listings(page, url: str, pages: int) -> list[dict]:
         time.sleep(1.5)
 
         if "shield" in page.content()[:5000].lower():
-            print(f"    [!] CAPTCHA na str.{p}, preskacem URL")
+            try:
+                shown = page.title()[:80]
+            except Exception:
+                shown = ""
+            print(f"    [!] CAPTCHA na str.{p}, preskacem URL | {shown}")
             break
 
         ads = page.evaluate("""
@@ -879,7 +911,7 @@ def run():
     }
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
+        launch_kwargs = dict(
             headless=HEADLESS,
             args=[
                 "--disable-blink-features=AutomationControlled",
@@ -890,6 +922,11 @@ def run():
                 "--disable-setuid-sandbox",
             ],
         )
+        proxy = _proxy_settings()
+        if proxy:
+            launch_kwargs["proxy"] = proxy
+            print("  [i] Proxy ukljucen")
+        browser = p.chromium.launch(**launch_kwargs)
 
         # Bez rucnog UA: Playwright salje UA koji odgovara instaliranom Chromiumu.
         # Tvrdi Chrome/125 na novijem binaryju je sam po sebi bot-signal.
