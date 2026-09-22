@@ -1,0 +1,32 @@
+name: Njuskalo Pace
+
+# GitHubov schedule ("svakih 5 min") realno krene par puta dnevno.
+# Ovaj job ne otvara Njuskalo. Dok radi, šalje workflow_dispatch na svježi runner.
+# Satni cron je samo watchdog ako lanac stane. cancel nije uključen: pace.sh
+# izađe ako drugi pace već čeka, da ne bude dva ritma.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: njuskalo-pace
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  pace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Pace dispatches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/pace.sh

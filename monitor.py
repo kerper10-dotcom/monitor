@@ -24,7 +24,7 @@ import re
 import sqlite3
 import time
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -99,9 +99,16 @@ TELEGRAM_MAX_CHARS = 4000
 # Postavi na None ako zelis SVE oglase bez obzira na datum
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
-# ~20 detalja po runu. 12 runova na sat = svaki oglas jednom na sat.
-# 40–50 u jednom runu na GitHub IP-u i dalje pali ShieldSquare.
-SAVED_ADS_PER_RUN = 20
+# ~20 detalja po runu. 40–50 na istom GitHub IP-u pali ShieldSquare.
+# Koliko rundi stane u sat računa pacer; ovdje je samo veličina jedne runde.
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.environ.get(name, str(default))))
+    except ValueError:
+        return default
+
+
+SAVED_ADS_PER_RUN = _env_int("SAVED_ADS_PER_RUN", 20)
 
 
 # =============================================================================
@@ -142,6 +149,10 @@ def init_db():
     )
     try:
         conn.execute("ALTER TABLE saved_ads ADD COLUMN status TEXT DEFAULT 'active'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE saved_ads ADD COLUMN last_attempt TEXT")
     except sqlite3.OperationalError:
         pass
 
@@ -334,6 +345,18 @@ def _is_ad_gone(ad_id: int, current_url: str) -> bool:
     return f"oglas-{ad_id}" not in (current_url or "").lower()
 
 
+def _mark_attempt(ad_id: int, now: str) -> None:
+    """Zabilježi pokušaj i kad stranica nije pročitana (CAPTCHA, nema cijene, greška).
+
+    Inače istih 20 oglasa ostane na čelu reda i ostali se uopće ne otvore.
+    last_checked i dalje znači zadnje uspješno očitanje.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("UPDATE saved_ads SET last_attempt = ? WHERE id = ?", (now, ad_id))
+    conn.commit()
+    conn.close()
+
+
 def _mark_saved_status(ad_id: int, status: str, title=None, last_price=None, last_checked=None, saved_price=None):
     conn = sqlite3.connect(DB_FILE)
     conn.execute(
@@ -347,6 +370,20 @@ def _mark_saved_status(ad_id: int, status: str, title=None, last_price=None, las
     )
     conn.commit()
     conn.close()
+
+
+def _queue_stamp(row) -> datetime:
+    """last_attempt ako postoji, inače last_checked. Prazno = nikad, ide prvo."""
+    attempt = row[7] if len(row) > 7 else None
+    return _parse_last_checked(attempt or row[6])
+
+
+def _select_saved_batch(rows: list, limit: int) -> list:
+    """Najstariji pokušaj prvi. Satni slot je preskakao oglase kad GitHub zakasni."""
+    ordered = sorted(rows, key=lambda r: (_queue_stamp(r), r[0]))
+    if limit <= 0:
+        return []
+    return ordered[:limit]
 
 
 def _zagreb_now() -> datetime:
@@ -543,15 +580,13 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 
 
 def check_saved_ads(page) -> tuple[list[str], int, dict]:
-    """~20 spremljenih po runu. 12 runova na sat pokrije sve oglase."""
+    """~20 najstarije provjerenih spremljenih oglasa. Pacer ih vrti jednom na sat."""
     z = _zagreb_now()
-    # :02,:07,:12… → 12 tickova na sat
-    tick = z.hour * 12 + z.minute // 5
 
     conn = sqlite3.connect(DB_FILE)
     saved = conn.execute(
         "SELECT id, title, url, saved_price, last_price, "
-        "COALESCE(status, 'active'), last_checked FROM saved_ads"
+        "COALESCE(status, 'active'), last_checked, last_attempt FROM saved_ads"
     ).fetchall()
     conn.close()
 
@@ -570,12 +605,15 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     }
     if not saved:
         return [], 0, empty_stats
-    slices = max(1, (len(saved) + SAVED_ADS_PER_RUN - 1) // SAVED_ADS_PER_RUN)
-    slot = tick % slices
+    batch = _select_saved_batch(saved, SAVED_ADS_PER_RUN)
+    stale_cutoff = datetime.now() - timedelta(hours=1)
+    stale = sum(1 for r in saved if _queue_stamp(r) < stale_cutoff)
     print(
-        f"  [i] saved_ads {slot + 1}/{slices} (~{SAVED_ADS_PER_RUN}/run) "
-        f"| Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
+        f"  [i] Najstarijih {len(batch)} od {len(saved)} "
+        f"({stale} starije od 1 h) | Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
     )
+    if batch:
+        print("  [i] IDs: " + ", ".join(str(r[0]) for r in batch))
 
     messages = []
     skipped_captcha = 0
@@ -587,7 +625,6 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     no_price = 0
     errors = 0
     now = time.strftime("%d.%m.%Y. %H:%M")
-    saved = sorted(saved, key=lambda r: (_parse_last_checked(r[6]), r[0]))
 
     def apply_result(res: dict):
         nonlocal skipped_captcha, errors, visited, still_gone, no_price
@@ -619,19 +656,21 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
             if res.get("message"):
                 messages.append(res["message"])
 
-    ordered = sorted(saved, key=lambda r: r[0])
     slice_total = 0
-    for i, row in enumerate(ordered):
-        if i % slices != slot:
-            continue
+    for row in batch:
         if slice_total:
             _pause(DELAY_BETWEEN_SAVED_ADS)
         slice_total += 1
-        apply_result(_check_one_saved_ad(page, row, now))
+        _mark_attempt(row[0], now)
+        apply_result(_check_one_saved_ad(page, row[:7], now))
 
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
-    print(f"  [i] Komad {slot + 1}/{slices}: {slice_total} oglasa, {checked} OK")
+    slices = max(1, (len(saved) + SAVED_ADS_PER_RUN - 1) // SAVED_ADS_PER_RUN)
+    print(
+        f"  [i] Runda: {slice_total} oglasa, {checked} OK, "
+        f"{skipped_captcha} CAPTCHA | pokrivenost {slices} rundi"
+    )
     if messages:
         print(f"  [!] {len(messages)} promjena detektirano")
 
@@ -644,7 +683,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "no_price": no_price,
         "errors": errors,
         "captcha_ads": captcha_ads,
-        "slot": slot,
+        "slot": 0,
         "slices": slices,
         "slice_total": slice_total,
     }
@@ -954,9 +993,10 @@ def run():
                 + telegram_body
             )
         if skipped_saved > 0:
-            slot = saved_stats.get("slot")
-            cap_key = f"captcha:{time.strftime('%Y-%m-%d')}:s{slot}"
-            if not already_notified(cap_key, hours=20):
+            # Jedno upozorenje na 3 sata. Inače 12 rundi pošalje 12 istih poruka.
+            bucket = int(time.strftime("%H")) // 3
+            cap_key = f"captcha:{time.strftime('%Y-%m-%d')}:q{bucket}"
+            if not already_notified(cap_key, hours=4):
                 mark_notified(cap_key)
                 cap_lines = [
                     f"⚠️ <b>UPOZORENJE</b>\n📅 {ts}\n"
