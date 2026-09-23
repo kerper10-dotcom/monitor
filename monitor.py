@@ -691,6 +691,11 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         slice_total += 1
         _mark_attempt(row[0], now)
         apply_result(_check_one_saved_ad(page, row[:7], now))
+        # GitHub IP često dobije ShieldSquare već na prvom URL-u. Ostali u rundi
+        # neće proći — prekini umjesto da lupaš isti blok 20 puta.
+        if checked == 0 and skipped_captcha >= 2:
+            print("  [!] IP blokiran od starta, prekidam rundu")
+            break
 
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
@@ -1035,13 +1040,22 @@ def run():
             cap_key = f"captcha:{time.strftime('%Y-%m-%d')}:q{bucket}"
             if not already_notified(cap_key, hours=4):
                 mark_notified(cap_key)
-                cap_lines = [
-                    f"⚠️ <b>UPOZORENJE</b>\n📅 {ts}\n"
-                    f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok).\n"
-                ]
-                for ad_id, title, url in (saved_stats.get("captcha_ads") or [])[:25]:
-                    cap_lines.append(f"{ad_id} — {title or '?'}\n{url}")
-                send_telegram("\n".join(cap_lines))
+                total_block = saved_stats.get("checked", 0) == 0
+                if total_block:
+                    send_telegram(
+                        f"⚠️ <b>RUN BLOKIRAN</b>\n📅 {ts}\n"
+                        "ShieldSquare je zaustavio cijelu rundu na prvim oglasima. "
+                        "Nije do tih oglasa — GitHub IP je odmah odbijen. "
+                        "Proxy (PROXY_SERVER) nije uključen, pa se ništa nije provjerilo."
+                    )
+                else:
+                    cap_lines = [
+                        f"⚠️ <b>UPOZORENJE</b>\n📅 {ts}\n"
+                        f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok).\n"
+                    ]
+                    for ad_id, title, url in (saved_stats.get("captcha_ads") or [])[:25]:
+                        cap_lines.append(f"{ad_id} — {title or '?'}\n{url}")
+                    send_telegram("\n".join(cap_lines))
             else:
                 print("  [i] CAPTCHA upozorenje vec poslano za ovaj slice — skip")
     elif first_run and total_new > 0:
