@@ -1,13 +1,14 @@
 name: Njuskalo Saved Ads
 
-# Jedna runda = ~20 najstarijih detaljnih URL-ova na svježem runneru.
-# Ritam drži monitor-pace.yml (workflow_dispatch). Nema vlastitog schedulea:
-# 5-minutni cron se nije držao, a zajedno s pacerom bi duplirao scrape.
+# Odvojeno od novih oglasa. 3× na sat, ~30 URL-ova → pun krug ~2 sata.
+# Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 on:
+  schedule:
+    - cron: "10,30,50 * * * *"
   workflow_dispatch:
 
 concurrency:
-  group: njuskalo-saved
+  group: njuskalo-monitor
   cancel-in-progress: false
 
 permissions:
@@ -16,13 +17,11 @@ permissions:
 jobs:
   saved:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -40,13 +39,19 @@ jobs:
           MONITOR_MODE: saved
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
-          PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
-          PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
         run: python monitor.py
 
       - name: Commit DB and saved_ads changes
         env:
           GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: bash scripts/commit_state.sh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git add njuskalo.db saved_ads.json
+          if ! git diff --staged --quiet; then
+            git commit -m "Update njuskalo.db and saved_ads.json [skip ci]"
+            git push
+          else
+            echo "No DB/saved_ads changes to commit"
+          fi

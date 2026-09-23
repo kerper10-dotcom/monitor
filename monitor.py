@@ -19,12 +19,11 @@ Tokeni se nikad ne stavljaju u kod.
 
 import json
 import os
-import random
 import re
 import sqlite3
 import time
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -72,12 +71,8 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 PAGES_PER_URL = 2
 
 # Pauza izmedu URL-ova (sekunde)
-DELAY_BETWEEN_URLS = (2.5, 5.5)
-DELAY_BETWEEN_SAVED_ADS = (4.0, 8.0)
-
-
-def _pause(bounds: tuple[float, float]) -> None:
-    time.sleep(random.uniform(*bounds))
+DELAY_BETWEEN_URLS = 2.0
+DELAY_BETWEEN_SAVED_ADS = 3.0
 
 # categories | saved | all (lokalno)
 MONITOR_MODE = os.environ.get("MONITOR_MODE", "all").strip().lower()
@@ -99,16 +94,8 @@ TELEGRAM_MAX_CHARS = 4000
 # Postavi na None ako zelis SVE oglase bez obzira na datum
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
-# ~20 detalja po runu. 40–50 na istom GitHub IP-u pali ShieldSquare.
-# Koliko rundi stane u sat računa pacer; ovdje je samo veličina jedne runde.
-def _env_int(name: str, default: int) -> int:
-    try:
-        return max(1, int(os.environ.get(name, str(default))))
-    except ValueError:
-        return default
-
-
-SAVED_ADS_PER_RUN = _env_int("SAVED_ADS_PER_RUN", 20)
+# 6 sliceova, 3 runa na sat → cijeli krug ~2 sata, ~30 URL-ova po runu.
+SAVED_ADS_SLICES = 6
 
 
 # =============================================================================
@@ -149,10 +136,6 @@ def init_db():
     )
     try:
         conn.execute("ALTER TABLE saved_ads ADD COLUMN status TEXT DEFAULT 'active'")
-    except sqlite3.OperationalError:
-        pass
-    try:
-        conn.execute("ALTER TABLE saved_ads ADD COLUMN last_attempt TEXT")
     except sqlite3.OperationalError:
         pass
 
@@ -345,18 +328,6 @@ def _is_ad_gone(ad_id: int, current_url: str) -> bool:
     return f"oglas-{ad_id}" not in (current_url or "").lower()
 
 
-def _mark_attempt(ad_id: int, now: str) -> None:
-    """Zabilježi pokušaj i kad stranica nije pročitana (CAPTCHA, nema cijene, greška).
-
-    Inače istih 20 oglasa ostane na čelu reda i ostali se uopće ne otvore.
-    last_checked i dalje znači zadnje uspješno očitanje.
-    """
-    conn = sqlite3.connect(DB_FILE)
-    conn.execute("UPDATE saved_ads SET last_attempt = ? WHERE id = ?", (now, ad_id))
-    conn.commit()
-    conn.close()
-
-
 def _mark_saved_status(ad_id: int, status: str, title=None, last_price=None, last_checked=None, saved_price=None):
     conn = sqlite3.connect(DB_FILE)
     conn.execute(
@@ -370,20 +341,6 @@ def _mark_saved_status(ad_id: int, status: str, title=None, last_price=None, las
     )
     conn.commit()
     conn.close()
-
-
-def _queue_stamp(row) -> datetime:
-    """last_attempt ako postoji, inače last_checked. Prazno = nikad, ide prvo."""
-    attempt = row[7] if len(row) > 7 else None
-    return _parse_last_checked(attempt or row[6])
-
-
-def _select_saved_batch(rows: list, limit: int) -> list:
-    """Najstariji pokušaj prvi. Satni slot je preskakao oglase kad GitHub zakasni."""
-    ordered = sorted(rows, key=lambda r: (_queue_stamp(r), r[0]))
-    if limit <= 0:
-        return []
-    return ordered[:limit]
 
 
 def _zagreb_now() -> datetime:
@@ -457,34 +414,6 @@ def _fetch_price_text(page) -> str:
     return ""
 
 
-def _captcha_result(page, ad_id, title, url) -> dict:
-    try:
-        shown = (page.title() or "")[:100]
-    except Exception:
-        shown = ""
-    try:
-        final = (page.url or "")[:160]
-    except Exception:
-        final = ""
-    print(f"    [!] CAPTCHA {ad_id} | {shown} | {final}")
-    return {"kind": "captcha", "ad": (ad_id, title, url)}
-
-
-def _proxy_settings() -> dict | None:
-    """Samo ako je PROXY_SERVER postavljen. Inače izravno, kao i dosad."""
-    server = os.environ.get("PROXY_SERVER", "").strip()
-    if not server:
-        return None
-    proxy = {"server": server}
-    user = os.environ.get("PROXY_USERNAME", "").strip()
-    password = os.environ.get("PROXY_PASSWORD", "").strip()
-    if user:
-        proxy["username"] = user
-    if password:
-        proxy["password"] = password
-    return proxy
-
-
 def _check_one_saved_ad(page, row, now: str) -> dict:
     """Provjeri jedan spremljeni oglas. Vraca kind + optional message."""
     ad_id, title, url, saved_price, last_price, status, last_checked = row
@@ -497,18 +426,18 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 
     page_title = page.title()
     if "shieldsquare" in page_title.lower() or "captcha" in page_title.lower():
-        return _captcha_result(page, ad_id, title, url)
+        return {"kind": "captcha", "ad": (ad_id, title, url)}
 
     try:
         body_probe = page.locator("body").inner_text()[:500].lower()
     except Exception:
         body_probe = ""
     if "shieldsquare" in body_probe or "tamnu stranu" in body_probe:
-        return _captcha_result(page, ad_id, title, url)
+        return {"kind": "captcha", "ad": (ad_id, title, url)}
 
     current_url = page.url
     if current_url != url and "njuskalo.hr" not in current_url:
-        return _captcha_result(page, ad_id, title, url)
+        return {"kind": "captcha", "ad": (ad_id, title, url)}
 
     if _is_ad_gone(ad_id, current_url):
         if status != "gone":
@@ -608,13 +537,19 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 
 
 def check_saved_ads(page) -> tuple[list[str], int, dict]:
-    """~20 najstarije provjerenih spremljenih oglasa. Pacer ih vrti jednom na sat."""
+    """1/6 svih spremljenih (id % 6 == sat % 6), uklj. gone."""
     z = _zagreb_now()
+    # :10 → 0, :30 → 1, :50 → 2 unutar sata; 6 sliceova = pun krug za 2 sata
+    slot = (z.hour * 3 + z.minute // 20) % SAVED_ADS_SLICES
+    print(
+        f"  [i] saved_ads slice {slot + 1}/{SAVED_ADS_SLICES} "
+        f"| Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
+    )
 
     conn = sqlite3.connect(DB_FILE)
     saved = conn.execute(
         "SELECT id, title, url, saved_price, last_price, "
-        "COALESCE(status, 'active'), last_checked, last_attempt FROM saved_ads"
+        "COALESCE(status, 'active'), last_checked FROM saved_ads"
     ).fetchall()
     conn.close()
 
@@ -627,21 +562,11 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "no_price": 0,
         "errors": 0,
         "captcha_ads": [],
-        "slot": 0,
-        "slices": 1,
+        "slot": slot,
         "slice_total": 0,
     }
     if not saved:
         return [], 0, empty_stats
-    batch = _select_saved_batch(saved, SAVED_ADS_PER_RUN)
-    stale_cutoff = datetime.now() - timedelta(hours=1)
-    stale = sum(1 for r in saved if _queue_stamp(r) < stale_cutoff)
-    print(
-        f"  [i] Najstarijih {len(batch)} od {len(saved)} "
-        f"({stale} starije od 1 h) | Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
-    )
-    if batch:
-        print("  [i] IDs: " + ", ".join(str(r[0]) for r in batch))
 
     messages = []
     skipped_captcha = 0
@@ -653,6 +578,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
     no_price = 0
     errors = 0
     now = time.strftime("%d.%m.%Y. %H:%M")
+    saved = sorted(saved, key=lambda r: (_parse_last_checked(r[6]), r[0]))
 
     def apply_result(res: dict):
         nonlocal skipped_captcha, errors, visited, still_gone, no_price
@@ -685,25 +611,17 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
                 messages.append(res["message"])
 
     slice_total = 0
-    for row in batch:
+    for row in saved:
+        if row[0] % SAVED_ADS_SLICES != slot:
+            continue
         if slice_total:
-            _pause(DELAY_BETWEEN_SAVED_ADS)
+            time.sleep(DELAY_BETWEEN_SAVED_ADS)
         slice_total += 1
-        _mark_attempt(row[0], now)
-        apply_result(_check_one_saved_ad(page, row[:7], now))
-        # GitHub IP često dobije ShieldSquare već na prvom URL-u. Ostali u rundi
-        # neće proći — prekini umjesto da lupaš isti blok 20 puta.
-        if checked == 0 and skipped_captcha >= 2:
-            print("  [!] IP blokiran od starta, prekidam rundu")
-            break
+        apply_result(_check_one_saved_ad(page, row, now))
 
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
-    slices = max(1, (len(saved) + SAVED_ADS_PER_RUN - 1) // SAVED_ADS_PER_RUN)
-    print(
-        f"  [i] Runda: {slice_total} oglasa, {checked} OK, "
-        f"{skipped_captcha} CAPTCHA | pokrivenost {slices} rundi"
-    )
+    print(f"  [i] Slice {slot + 1}/{SAVED_ADS_SLICES}: {slice_total} oglasa, {checked} OK")
     if messages:
         print(f"  [!] {len(messages)} promjena detektirano")
 
@@ -716,8 +634,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "no_price": no_price,
         "errors": errors,
         "captcha_ads": captcha_ads,
-        "slot": 0,
-        "slices": slices,
+        "slot": slot,
         "slice_total": slice_total,
     }
     return messages, skipped_captcha, stats
@@ -767,11 +684,7 @@ def scrape_listings(page, url: str, pages: int) -> list[dict]:
         time.sleep(1.5)
 
         if "shield" in page.content()[:5000].lower():
-            try:
-                shown = page.title()[:80]
-            except Exception:
-                shown = ""
-            print(f"    [!] CAPTCHA na str.{p}, preskacem URL | {shown}")
+            print(f"    [!] CAPTCHA na str.{p}, preskacem URL")
             break
 
         ads = page.evaluate("""
@@ -916,7 +829,7 @@ def run():
     }
 
     with sync_playwright() as p:
-        launch_kwargs = dict(
+        browser = p.chromium.launch(
             headless=HEADLESS,
             args=[
                 "--disable-blink-features=AutomationControlled",
@@ -927,15 +840,15 @@ def run():
                 "--disable-setuid-sandbox",
             ],
         )
-        proxy = _proxy_settings()
-        if proxy:
-            launch_kwargs["proxy"] = proxy
-            print("  [i] Proxy ukljucen")
-        browser = p.chromium.launch(**launch_kwargs)
 
-        # Bez rucnog UA: Playwright salje UA koji odgovara instaliranom Chromiumu.
-        # Tvrdi Chrome/125 na novijem binaryju je sam po sebi bot-signal.
-        context = browser.new_context(locale="hr-HR")
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+            locale="hr-HR",
+        )
 
         page = context.new_page()
         page.add_init_script(
@@ -1011,7 +924,7 @@ def run():
                 print(f"  [~] Nema novih")
 
             if idx < len(categories) - 1:
-                _pause(DELAY_BETWEEN_URLS)
+                time.sleep(DELAY_BETWEEN_URLS)
 
         browser.close()
 
@@ -1035,27 +948,17 @@ def run():
                 + telegram_body
             )
         if skipped_saved > 0:
-            # Jedno upozorenje na 3 sata. Inače 12 rundi pošalje 12 istih poruka.
-            bucket = int(time.strftime("%H")) // 3
-            cap_key = f"captcha:{time.strftime('%Y-%m-%d')}:q{bucket}"
-            if not already_notified(cap_key, hours=4):
+            slot = saved_stats.get("slot")
+            cap_key = f"captcha:{time.strftime('%Y-%m-%d')}:s{slot}"
+            if not already_notified(cap_key, hours=20):
                 mark_notified(cap_key)
-                total_block = saved_stats.get("checked", 0) == 0
-                if total_block:
-                    send_telegram(
-                        f"⚠️ <b>RUN BLOKIRAN</b>\n📅 {ts}\n"
-                        "ShieldSquare je zaustavio cijelu rundu na prvim oglasima. "
-                        "Nije do tih oglasa — GitHub IP je odmah odbijen. "
-                        "Proxy (PROXY_SERVER) nije uključen, pa se ništa nije provjerilo."
-                    )
-                else:
-                    cap_lines = [
-                        f"⚠️ <b>UPOZORENJE</b>\n📅 {ts}\n"
-                        f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok).\n"
-                    ]
-                    for ad_id, title, url in (saved_stats.get("captcha_ads") or [])[:25]:
-                        cap_lines.append(f"{ad_id} — {title or '?'}\n{url}")
-                    send_telegram("\n".join(cap_lines))
+                cap_lines = [
+                    f"⚠️ <b>UPOZORENJE</b>\n📅 {ts}\n"
+                    f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok).\n"
+                ]
+                for ad_id, title, url in (saved_stats.get("captcha_ads") or [])[:25]:
+                    cap_lines.append(f"{ad_id} — {title or '?'}\n{url}")
+                send_telegram("\n".join(cap_lines))
             else:
                 print("  [i] CAPTCHA upozorenje vec poslano za ovaj slice — skip")
     elif first_run and total_new > 0:
