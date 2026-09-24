@@ -1,14 +1,16 @@
 name: Njuskalo Saved Ads
 
-# Odvojeno od novih oglasa. 3× na sat, ~30 URL-ova → pun krug ~2 sata.
+# GitHub guta česte cronove (10,30,50 nikad nisu palili na vrijeme).
+# Jedan schedule svakih 6 h, 8 odvojenih jobova (~28 oglasa, svaki svoj IP).
+# 20:20 UTC = 22:20 Zagreb ljeti, 21:20 zimi. Isto za 02, 08, 14 UTC.
 # Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 on:
   schedule:
-    - cron: "10,30,50 * * * *"
+    - cron: "20 */6 * * *"
   workflow_dispatch:
 
 concurrency:
-  group: njuskalo-monitor
+  group: njuskalo-saved
   cancel-in-progress: false
 
 permissions:
@@ -17,7 +19,12 @@ permissions:
 jobs:
   saved:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        slice: [0, 1, 2, 3, 4, 5, 6, 7]
 
     steps:
       - name: Checkout repo
@@ -33,10 +40,12 @@ jobs:
           pip install -r requirements.txt
           playwright install chromium --with-deps
 
-      - name: Run saved-ads check
+      - name: Run saved-ads slice
         env:
           TZ: Europe/Zagreb
           MONITOR_MODE: saved
+          SAVED_SLICE: ${{ matrix.slice }}
+          SAVED_SLICES: "8"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python monitor.py
@@ -48,6 +57,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git pull --rebase --autostash origin main
           git add njuskalo.db saved_ads.json
           if ! git diff --staged --quiet; then
             git commit -m "Update njuskalo.db and saved_ads.json [skip ci]"

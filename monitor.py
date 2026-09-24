@@ -94,8 +94,8 @@ TELEGRAM_MAX_CHARS = 4000
 # Postavi na None ako zelis SVE oglase bez obzira na datum
 SKIP_BEFORE_DATE = "28.05.2026"  # npr. "28.05.2026" ili None
 
-# 6 sliceova, 3 runa na sat → cijeli krug ~2 sata, ~30 URL-ova po runu.
-SAVED_ADS_SLICES = 6
+# Jedan workflow svakih 6 h, 8 komada po ~28 oglasa (svaki svoj runner).
+SAVED_ADS_SLICES = 8
 
 
 # =============================================================================
@@ -537,12 +537,16 @@ def _check_one_saved_ad(page, row, now: str) -> dict:
 
 
 def check_saved_ads(page) -> tuple[list[str], int, dict]:
-    """1/6 svih spremljenih (id % 6 == sat % 6), uklj. gone."""
+    """Jedan komad spremljenih. SAVED_SLICE/SAVED_SLICES dolaze iz Actions matrixa."""
     z = _zagreb_now()
-    # :10 → 0, :30 → 1, :50 → 2 unutar sata; 6 sliceova = pun krug za 2 sata
-    slot = (z.hour * 3 + z.minute // 20) % SAVED_ADS_SLICES
+    n_slices = int(os.environ.get("SAVED_SLICES", str(SAVED_ADS_SLICES)) or SAVED_ADS_SLICES)
+    forced = os.environ.get("SAVED_SLICE", "").strip()
+    if forced.isdigit():
+        slot = int(forced) % n_slices
+    else:
+        slot = (z.hour * 3 + z.minute // 20) % n_slices
     print(
-        f"  [i] saved_ads slice {slot + 1}/{SAVED_ADS_SLICES} "
+        f"  [i] saved_ads slice {slot + 1}/{n_slices} "
         f"| Zagreb {z.strftime('%d.%m.%Y. %H:%M')}"
     )
 
@@ -612,7 +616,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
 
     slice_total = 0
     for row in saved:
-        if row[0] % SAVED_ADS_SLICES != slot:
+        if row[0] % n_slices != slot:
             continue
         if slice_total:
             time.sleep(DELAY_BETWEEN_SAVED_ADS)
@@ -621,7 +625,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
 
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
-    print(f"  [i] Slice {slot + 1}/{SAVED_ADS_SLICES}: {slice_total} oglasa, {checked} OK")
+    print(f"  [i] Slice {slot + 1}/{n_slices}: {slice_total} oglasa, {checked} OK")
     if messages:
         print(f"  [!] {len(messages)} promjena detektirano")
 
