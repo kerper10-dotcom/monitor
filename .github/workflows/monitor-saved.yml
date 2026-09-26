@@ -48,7 +48,10 @@ jobs:
           SAVED_SLICES: "8"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python monitor.py
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+          python monitor.py
 
       - name: Commit DB and saved_ads changes
         env:
@@ -57,7 +60,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
-          git pull --rebase --autostash origin main
+          python scripts/merge_slice.py
           git add njuskalo.db saved_ads.json
           if ! git diff --staged --quiet; then
             git commit -m "Update njuskalo.db and saved_ads.json [skip ci]"

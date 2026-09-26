@@ -573,6 +573,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         return [], 0, empty_stats
 
     messages = []
+    touched_ids: list[int] = []
     skipped_captcha = 0
     captcha_ads: list[tuple] = []
     checked = 0
@@ -621,7 +622,10 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         if slice_total:
             time.sleep(DELAY_BETWEEN_SAVED_ADS)
         slice_total += 1
-        apply_result(_check_one_saved_ad(page, row, now))
+        res = _check_one_saved_ad(page, row, now)
+        apply_result(res)
+        if res.get("kind") in ("still_gone", "sold", "reactivated", "ok", "price"):
+            touched_ids.append(row[0])
 
     if skipped_captcha:
         print(f"  [i] Preskoceno {skipped_captcha} spremljenih oglasa (CAPTCHA)")
@@ -640,6 +644,7 @@ def check_saved_ads(page) -> tuple[list[str], int, dict]:
         "captcha_ads": captcha_ads,
         "slot": slot,
         "slice_total": slice_total,
+        "touched_ids": touched_ids,
     }
     return messages, skipped_captcha, stats
 
@@ -933,6 +938,13 @@ def run():
         browser.close()
 
     export_saved_ads_to_json()
+    touched = set(saved_stats.get("touched_ids") or [])
+    if touched:
+        current = {a["id"]: a for a in json.loads(Path(SAVED_ADS_FILE).read_text(encoding="utf-8"))}
+        patch = [current[i] for i in sorted(touched) if i in current]
+        Path("slice_patch.json").write_text(
+            json.dumps(patch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
 
     if not first_run and telegram_configured():
         ts = time.strftime("%d.%m.%Y. %H:%M")
