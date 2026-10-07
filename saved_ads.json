@@ -48,6 +48,14 @@
     "status": "gone"
   },
   {
+    "id": 43772924,
+    "title": "Toyota Yaris 1,5 automatik",
+    "url": "https://www.njuskalo.hr/auti/toyota-yaris-1.5-automatik-oglas-43772924",
+    "saved_price": 20000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 44739009,
     "title": "Kuća u prirodi na rubu Zadra – mir, tišina. Moguca zamjena za stan",
     "url": "https://www.njuskalo.hr/nekretnine/kuca-zadar-ukupne-povrsine-80.00-m2-oglas-44739009",
@@ -62,6 +70,14 @@
     "saved_price": 215000.0,
     "saved_date": "01.09.2026",
     "status": "gone"
+  },
+  {
+    "id": 45201774,
+    "title": "JASTREBARSKO, VOLAVJE, ECO FRIENDLY NASELJE, 16 MONTAŽNIH KUĆA",
+    "url": "https://www.njuskalo.hr/nekretnine/jastrebarsko-volavje-naselje-15-montaznih-kuca-eko-vrtovima-oglas-45201774",
+    "saved_price": 195000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
   },
   {
     "id": 45304339,
@@ -96,6 +112,14 @@
     "status": "active"
   },
   {
+    "id": 46449298,
+    "title": "PRODAJA, BREGANA PISAROVINSKA, KUĆA 70 M2 + 1.000 M2 OKUĆNICE,",
+    "url": "https://www.njuskalo.hr/nekretnine/prodaja-bregana-pisarovinska-kuca-70-m2-1.000-m2-okucnice-oglas-46449298",
+    "saved_price": 175000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 46481484,
     "title": "Moderan 2s stan na Knežiji + spremište",
     "url": "https://www.njuskalo.hr/nekretnine/knezija-dvosoban-stan-35m2-oglas-46481484",
@@ -109,6 +133,14 @@
     "url": "https://www.njuskalo.hr/nekretnine/kuca-pridraga-130-m2-novoizgradena-prizemnica-bazenom-oglas-46615337",
     "saved_price": 259000.0,
     "saved_date": "04.07.2026",
+    "status": "active"
+  },
+  {
+    "id": 46756720,
+    "title": "Plovanija, NOVOGRADNJA, dvosoban stan 90,59 m2,, pogled na cijeli grad",
+    "url": "https://www.njuskalo.hr/nekretnine/plovanija-novogradnja-dvosoban-stan-90m2-oglas-46756720",
+    "saved_price": 326124.0,
+    "saved_date": "07.10.2026",
     "status": "active"
   },
   {
@@ -240,6 +272,14 @@
     "status": "gone"
   },
   {
+    "id": 48637072,
+    "title": "Bili Brig, dvosoban penthause, novogradnja",
+    "url": "https://www.njuskalo.hr/nekretnine/bili-brig-dvosoban-penthause-novogradnja-oglas-48637072",
+    "saved_price": 269000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 48810425,
     "title": "Vodice - Dvojna kuća s dvorištem u Zatonskoj ulici",
     "url": "https://www.njuskalo.hr/nekretnine/vodice-dvojna-kuca-dvoristem-oglas-48810425",
@@ -368,6 +408,14 @@
     "status": "active"
   },
   {
+    "id": 49377072,
+    "title": "Prodaje se LuXuzna Kuća",
+    "url": "https://www.njuskalo.hr/nekretnine/prodaje-se-luxuzna-kuca-oglas-49377072",
+    "saved_price": 360000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 49388774,
     "title": "Zadar - Bili Brig - namješten stan - 2 spavaće sobe",
     "url": "https://www.njuskalo.hr/nekretnine/zadar-bili-brig-namjesten-stan-2-spavace-sobe-oglas-49388774",
@@ -454,6 +502,14 @@
     "saved_price": 181900.0,
     "saved_date": "01.07.2026",
     "status": "gone"
+  },
+  {
+    "id": 49787271,
+    "title": "iPhone 16 Pro Max Natural Titanium 256Gb KAO NOV",
+    "url": "https://www.njuskalo.hr/iphone-16-pro-max/iphone-16-pro-max-natural-titanium-512-gb-oglas-49787271",
+    "saved_price": 779.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
   },
   {
     "id": 49792151,
@@ -696,6 +752,14 @@
     "status": "active"
   },
   {
+    "id": 50333220,
+    "title": "Stan za prodaju u Samoboru (Južno naselja)",
+    "url": "https://www.njuskalo.hr/nekretnine/stan-prodaju-samoboru-juzno-naselja-oglas-50333220",
+    "saved_price": 230000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 50344181,
     "title": "Stan: Zagreb (Štefanovec), 40,55 m2",
     "url": "https://www.njuskalo.hr/nekretnine/stan-zagreb-stefanovec-30.00-m2-oglas-50344181",
@@ -797,6 +861,14 @@
     "url": "https://www.njuskalo.hr/nekretnine/biograd-okolica-kuca-bazenom-145m2-oglas-50596595",
     "saved_price": 425000.0,
     "saved_date": "06.08.2026",
+    "status": "active"
+  },
+  {
+    "id": 50605616,
+    "title": "ZADAR, BILI BRIG - Penthouse u izgradnji s prekrasnim pogledom Z1S5",
+    "url": "https://www.njuskalo.hr/nekretnine/zadar-bili-brig-penthouse-izgradnji-prekrasnim-pogledom-z1s5-oglas-50605616",
+    "saved_price": 280000.0,
+    "saved_date": "07.10.2026",
     "status": "active"
   },
   {
@@ -1184,6 +1256,14 @@
     "status": "gone"
   },
   {
+    "id": 50940104,
+    "title": "Dugo Selo:Potpuno namješten 2s stan s garažnim mjestom |BEZ PROVIZIJE!",
+    "url": "https://www.njuskalo.hr/nekretnine/dugo-selo-potpuno-namjesten-2s-stan-garaznim-mjestom-odmah-useljiv-oglas-50940104",
+    "saved_price": 230000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 50944578,
     "title": "Zadar - Višnjik - kuća sa dva stana! Centar!! 360000€",
     "url": "https://www.njuskalo.hr/nekretnine/zadar-visnjik-kuca-dva-stana-odlicna-lokacija-390-000-oglas-50944578",
@@ -1552,6 +1632,14 @@
     "status": "gone"
   },
   {
+    "id": 51171070,
+    "title": "Zagreb, Prečko - uređen jednosoban stan",
+    "url": "https://www.njuskalo.hr/nekretnine/zagreb-precko-ureden-jednosoban-stan-oglas-51171070",
+    "saved_price": 145000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 51172506,
     "title": "Mercedes-Benz E-klasa 220 D AMG",
     "url": "https://www.njuskalo.hr/auti/mercedes-benz-e-klasa-220-d-automatik-oglas-51172506",
@@ -1888,6 +1976,14 @@
     "status": "active"
   },
   {
+    "id": 51562657,
+    "title": "SVETA NEDELJA, KUĆA 85 m2 s OKUĆNICOM U MIRNOM OKRUŽENJU",
+    "url": "https://www.njuskalo.hr/nekretnine/sveta-nedelja-kuca-85-m2-okucnicom-mirnom-okruzenju-oglas-51562657",
+    "saved_price": 295000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 51563596,
     "title": "Samobor,garsonjera 48m2 s GPM",
     "url": "https://www.njuskalo.hr/nekretnine/samobor-garsonjera-48m2-gpm-oglas-51563596",
@@ -1928,6 +2024,14 @@
     "status": "active"
   },
   {
+    "id": 51636509,
+    "title": "City garden - Trosobni stan na prvom katu novogradnje 74m2",
+    "url": "https://www.njuskalo.hr/nekretnine/city-garden-trosobni-stan-prvom-katu-novogradnje-74m2-oglas-51636509",
+    "saved_price": 342000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 51642175,
     "title": "Mazda CX-30 G150 | Jamstvo 12mj.",
     "url": "https://www.njuskalo.hr/auti/mazda-cx-30-g150-jamstvo-12mj-oglas-51642175",
@@ -1960,6 +2064,14 @@
     "status": "active"
   },
   {
+    "id": 51672048,
+    "title": "Veliko Polje – novogradnja, veliki vrt i natkriveni parking",
+    "url": "https://www.njuskalo.hr/nekretnine/veliko-polje-novogradnja-veliki-vrt-natkriveni-parking-oglas-51672048",
+    "saved_price": 206000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 51673362,
     "title": "Slivnica, prizemnica s bazenom, kompletno opremljena!!",
     "url": "https://www.njuskalo.hr/nekretnine/kuca-slivnica-97.00-m2-oglas-51673362",
@@ -1976,11 +2088,83 @@
     "status": "active"
   },
   {
+    "id": 51685565,
+    "title": "Stan: ZAPREŠIĆ - KALAMIRI, 44.40 m2 - dvosobni - ODLIČAN - PRILIKA !!!",
+    "url": "https://www.njuskalo.hr/nekretnine/stan-zapresic-kalamiri-44.00-m2-dvosobni-odlican-oglas-51685565",
+    "saved_price": 190000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
     "id": 51686708,
     "title": "Bili Brig, prilika! 75 m2 stan, potpuno namješten",
     "url": "https://www.njuskalo.hr/nekretnine/bili-brig-75-m2-stan-potpuno-namjesten-oglas-51686708",
     "saved_price": 279000.0,
     "saved_date": "01.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51693016,
+    "title": "Prekrasan mali stan",
+    "url": "https://www.njuskalo.hr/nekretnine/prekrasan-mali-stan-oglas-51693016",
+    "saved_price": 189000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51701062,
+    "title": "Toyota Corolla",
+    "url": "https://www.njuskalo.hr/auti/toyota-corolla-oglas-51701062",
+    "saved_price": 16000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51724695,
+    "title": "STAN, PRODAJA, DUGO SELO, CENTAR, 70 m2, 2-soban",
+    "url": "https://www.njuskalo.hr/nekretnine/stan-prodaja-dugo-selo-centar-70-m2-2-soban-oglas-51724695",
+    "saved_price": 205000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51733180,
+    "title": "Stan: Zaprešić, 57.00 m2",
+    "url": "https://www.njuskalo.hr/nekretnine/stan-zapresic-57.00-m2-oglas-51733180",
+    "saved_price": 206100.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51734191,
+    "title": "Stan: Zagreb (Odra), 68.00 m2",
+    "url": "https://www.njuskalo.hr/nekretnine/stan-zagreb-odra-68.00-m2-oglas-51734191",
+    "saved_price": 230000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51746129,
+    "title": "Dvosoban stan na odličnoj gradskoj lokaciji, Zadar (Višnjik)",
+    "url": "https://www.njuskalo.hr/nekretnine/dvosoban-stan-odlicnoj-gradskoj-lokaciji-zadar-visnjik-oglas-51746129",
+    "saved_price": 250000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51749320,
+    "title": "Stan: Samobor, 61.00 m2,ODLIČAN RASPORED, ADAPTIRAN, JUŽNO NASELJE!",
+    "url": "https://www.njuskalo.hr/nekretnine/stan-samobor-61.00-m2-odlican-raspored-adaptiran-juzno-naselje-oglas-51749320",
+    "saved_price": 195000.0,
+    "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51764254,
+    "title": "PRODAJE SE RENOVIRAN STAN – BILI BRIG, ZADAR",
+    "url": "https://www.njuskalo.hr/nekretnine/prodaje-se-renoviran-stan-bili-brig-zadar-oglas-51764254",
+    "saved_price": 270000.0,
+    "saved_date": "07.10.2026",
     "status": "active"
   }
 ]
