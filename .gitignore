@@ -6,3 +6,5 @@ venv/
 logs/
 *.log
 test-run.marker
+slice_patch.json
+captcha_patch.json

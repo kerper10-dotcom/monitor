@@ -946,6 +946,22 @@ def run():
             json.dumps(patch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
 
+    captcha_ads = saved_stats.get("captcha_ads") or []
+    if captcha_ads:
+        blocked_at = _zagreb_now().isoformat(timespec="seconds")
+        events = [
+            {"id": int(ad_id), "at": blocked_at}
+            for ad_id, _title, _url in captcha_ads
+        ]
+        Path("captcha_patch.json").write_text(
+            json.dumps({"events": events}, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(
+            f"  [i] Blokada zabiljezena za {len(events)} oglasa "
+            "(bez Telegrama, sazetak jednom dnevno)"
+        )
+
     if not first_run and telegram_configured():
         ts = time.strftime("%d.%m.%Y. %H:%M")
         if saved_messages:
@@ -963,20 +979,6 @@ def run():
                 f"━━━━━━━━━━━━━━━━━━━━"
                 + telegram_body
             )
-        if skipped_saved > 0:
-            slot = saved_stats.get("slot")
-            cap_key = f"captcha:{time.strftime('%Y-%m-%d')}:s{slot}"
-            if not already_notified(cap_key, hours=20):
-                mark_notified(cap_key)
-                cap_lines = [
-                    f"⚠️ <b>UPOZORENJE</b>\n📅 {ts}\n"
-                    f"{skipped_saved} spremljenih oglasa nije provjereno (CAPTCHA/blok).\n"
-                ]
-                for ad_id, title, url in (saved_stats.get("captcha_ads") or [])[:25]:
-                    cap_lines.append(f"{ad_id} — {title or '?'}\n{url}")
-                send_telegram("\n".join(cap_lines))
-            else:
-                print("  [i] CAPTCHA upozorenje vec poslano za ovaj slice — skip")
     elif first_run and total_new > 0:
         print(f"\n[i] Inicijalno spremljeno {total_new} oglasa u bazu (bez obavijesti)")
 

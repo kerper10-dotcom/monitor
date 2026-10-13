@@ -61,7 +61,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           python scripts/merge_slice.py
-          git add njuskalo.db saved_ads.json
+          git add njuskalo.db saved_ads.json captcha_log.json
           if ! git diff --staged --quiet; then
             git commit -m "Update njuskalo.db and saved_ads.json [skip ci]"
             git push
