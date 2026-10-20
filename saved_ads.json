@@ -160,6 +160,14 @@
     "status": "gone"
   },
   {
+    "id": 46982682,
+    "title": "ZADAR - NOVI BOKANJAC, 2-SOBAN, 1. KAT, 2 NATKRIVENA PARKINGA",
+    "url": "https://www.njuskalo.hr/nekretnine/zadar-bokanjac-2-sob-stan-s2-z2-68-m2-novogradnja-oglas-46982682",
+    "saved_price": 239000.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
+  },
+  {
     "id": 47008546,
     "title": "ZADAR - GALOVAC, građevinsko zemljište od 753 m2 za gradnju kuće!",
     "url": "https://www.njuskalo.hr/nekretnine/zadar-galovac-gradevinsko-zemljiste-734-m2-gradnju-kuce-oglas-47008546",
@@ -328,6 +336,14 @@
     "status": "gone"
   },
   {
+    "id": 48979727,
+    "title": "Građevinsko zemljište na prodaju, Zadar (Crno) 817 m2",
+    "url": "https://www.njuskalo.hr/nekretnine/gradevinsko-zemljiste-prodaju-zadar-crno-817-m2-oglas-48979727",
+    "saved_price": 106210.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
+  },
+  {
     "id": 48997027,
     "title": "Smoković, samostojeća kuća prizemnica s bazenom",
     "url": "https://www.njuskalo.hr/nekretnine/smokovic-samostojeca-kuca-prizemnica-bazenom-oglas-48997027",
@@ -389,6 +405,14 @@
     "url": "https://www.njuskalo.hr/nekretnine/zadar-vidikovac-dvosoban-stan-s9-89-m2-novogradnja-oglas-49263706",
     "saved_price": 294120.0,
     "saved_date": "01.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 49280424,
+    "title": "Građevinsko zemljište - Zemunik Donji",
+    "url": "https://www.njuskalo.hr/nekretnine/gradevinsko-zemljiste-zemunik-donji-oglas-49280424",
+    "saved_price": 58000.0,
+    "saved_date": "20.10.2026",
     "status": "active"
   },
   {
@@ -910,6 +934,14 @@
     "saved_price": 290000.0,
     "saved_date": "04.07.2026",
     "status": "gone"
+  },
+  {
+    "id": 50651235,
+    "title": "Macbook Pro M1 Pro 16GB 512GB, dobro očuvan + torbica",
+    "url": "https://www.njuskalo.hr/apple-macbook/macbook-pro-m1-pro-16gb-512gb-dobro-ocuvan-oglas-50651235",
+    "saved_price": 900.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
   },
   {
     "id": 50681683,
@@ -2016,6 +2048,14 @@
     "status": "gone"
   },
   {
+    "id": 51544411,
+    "title": "BOKANJAC - dvosobni stan S7 od 65,20 m2 na 2. katu, NOVOGRADNJA!",
+    "url": "https://www.njuskalo.hr/nekretnine/bokanjac-dvosobni-stan-s7-65.20-m2-2-katu-novogradnja-oglas-51544411",
+    "saved_price": 205000.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
+  },
+  {
     "id": 51544773,
     "title": "Poličnik, zemljište 474 m² - projekt i zahtjev za građevinsku",
     "url": "https://www.njuskalo.hr/nekretnine/policnik-zemljiste-474-m-projekt-zahtjev-gradevinsku-oglas-51544773",
@@ -2037,6 +2077,14 @@
     "url": "https://www.njuskalo.hr/nekretnine/sveta-nedelja-kuca-85-m2-okucnicom-mirnom-okruzenju-oglas-51562657",
     "saved_price": 295000.0,
     "saved_date": "07.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51563459,
+    "title": "BOKANJAC - Dvosoban stan S7 na 2. katu - 65m2",
+    "url": "https://www.njuskalo.hr/nekretnine/bokanjac-dvosoban-stan-s7-2-katu-65m2-oglas-51563459",
+    "saved_price": 205000.0,
+    "saved_date": "20.10.2026",
     "status": "active"
   },
   {
@@ -2256,6 +2304,14 @@
     "status": "active"
   },
   {
+    "id": 51780494,
+    "title": "Novogradnja - Dvosoban stan, 2. kat, 65 m2, Bokanjac, Zadar",
+    "url": "https://www.njuskalo.hr/nekretnine/novogradnja-dvosoban-stan-2-kat-65-m2-bokanjac-zadar-oglas-51780494",
+    "saved_price": 205000.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
+  },
+  {
     "id": 51783007,
     "title": "Stan: Zagreb (Klaka), 31.84 m2",
     "url": "https://www.njuskalo.hr/nekretnine/stan-zagreb-klaka-31.84-m2-oglas-51783007",
@@ -2272,11 +2328,35 @@
     "status": "active"
   },
   {
+    "id": 51819037,
+    "title": "Zadar,Plovanija,novogradnja ,2spavaće sobe,2parking mj,ostava,lift",
+    "url": "https://www.njuskalo.hr/nekretnine/zadar-vidikovac-novogradnja-2spavace-sobe-2parking-mj-ostava-lift-oglas-51819037",
+    "saved_price": 250000.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51821125,
+    "title": "Prodaja stana 39,52m2, Blato, sa parkirnim mjestom i spremistem",
+    "url": "https://www.njuskalo.hr/nekretnine/prodaja-stana-39.52m2-blato-parkirnim-mjestom-spremistem-oglas-51821125",
+    "saved_price": 215000.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
+  },
+  {
     "id": 51821752,
     "title": "Potpuno namješten, jednosoban stan-Bili Brig",
     "url": "https://www.njuskalo.hr/nekretnine/potpuno-namjesten-jednosoban-stan-bili-brig-oglas-51821752",
     "saved_price": 239000.0,
     "saved_date": "14.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51822421,
+    "title": "Toyota Yaris 1,5 automatik Akcija u PDV u",
+    "url": "https://www.njuskalo.hr/auti/toyota-yaris-1.5-automatik-akcija-pdv-oglas-51822421",
+    "saved_price": 16990.0,
+    "saved_date": "20.10.2026",
     "status": "active"
   },
   {
@@ -2301,6 +2381,38 @@
     "url": "https://www.njuskalo.hr/auti/mazda-cx-5-g194-automatik-oglas-51840222",
     "saved_price": 24000.0,
     "saved_date": "14.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51848621,
+    "title": "Apple Macbook M1 Pro 64GB 16\"",
+    "url": "https://www.njuskalo.hr/apple-macbook/apple-macbook-m1-pro-64gb-16-oglas-51848621",
+    "saved_price": 1500.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51857437,
+    "title": "Mazda CX-30 G150 automatik",
+    "url": "https://www.njuskalo.hr/auti/mazda-cx-30-g150-automatik-oglas-51857437",
+    "saved_price": 20900.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51902305,
+    "title": "Briševo - građevinsko zemljište 500m2",
+    "url": "https://www.njuskalo.hr/nekretnine/brisevo-gradevinsko-zemljiste-500m2-oglas-51902305",
+    "saved_price": 50000.0,
+    "saved_date": "20.10.2026",
+    "status": "active"
+  },
+  {
+    "id": 51939780,
+    "title": "Građevinsko zemljište, Murvica, 604 m2",
+    "url": "https://www.njuskalo.hr/nekretnine/gradevinsko-zemljiste-murvica-604-m2-oglas-51939780",
+    "saved_price": 84000.0,
+    "saved_date": "20.10.2026",
     "status": "active"
   }
 ]
